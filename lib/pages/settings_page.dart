@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-
 import '../services/websocket_service.dart';
+import '../models/gesture_mapping.dart';
+import '../services/gesture_settings_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -68,6 +69,23 @@ class _SettingsPageState extends State<SettingsPage> {
       smoothingWindow = 5;
       debounceTime = 300;
     });
+    gestureSettingsService.reset();
+  }
+
+  void updateSharedGestureSettings() {
+    gestureSettingsService.update(
+      GestureMapping(
+        openPalmUpCommand: openPalmUpCommand,
+        openPalmDownCommand: openPalmDownCommand,
+        openPalmRightCommand: openPalmRightCommand,
+        openPalmLeftCommand: openPalmLeftCommand,
+        twoFingerCommand: twoFingerCommand,
+        fistCommand: fistCommand,
+        pinchCommand: pinchCommand,
+        smoothingWindow: smoothingWindow,
+        debounceTime: debounceTime,
+      ),
+    );
   }
 
   Widget gestureMappingRow({
@@ -281,6 +299,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (value == null) return;
                       setState(() {
                         openPalmUpCommand = value;
+                        updateSharedGestureSettings();
                       });
                     },
                   ),
@@ -293,6 +312,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (value == null) return;
                       setState(() {
                         openPalmDownCommand = value;
+                        updateSharedGestureSettings();
                       });
                     },
                   ),
@@ -305,6 +325,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (value == null) return;
                       setState(() {
                         openPalmRightCommand = value;
+                        updateSharedGestureSettings();
                       });
                     },
                   ),
@@ -317,6 +338,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (value == null) return;
                       setState(() {
                         openPalmLeftCommand = value;
+                        updateSharedGestureSettings();
                       });
                     },
                   ),
@@ -329,6 +351,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (value == null) return;
                       setState(() {
                         twoFingerCommand = value;
+                        updateSharedGestureSettings();
                       });
                     },
                   ),
@@ -341,6 +364,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (value == null) return;
                       setState(() {
                         fistCommand = value;
+                        updateSharedGestureSettings();
                       });
                     },
                   ),
@@ -353,6 +377,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (value == null) return;
                       setState(() {
                         pinchCommand = value;
+                        updateSharedGestureSettings();
                       });
                     },
                   ),
@@ -410,6 +435,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onChanged: (value) {
                       setState(() {
                         smoothingWindow = value;
+                        updateSharedGestureSettings();
                       });
                     },
                   ),
@@ -433,6 +459,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onChanged: (value) {
                       setState(() {
                         debounceTime = value;
+                        updateSharedGestureSettings();
                       });
                     },
                   ),
