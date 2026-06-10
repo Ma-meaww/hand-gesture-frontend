@@ -34,6 +34,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   Timer? recordingTimer;
 
+  final TrainingSampleService trainingService = TrainingSampleService();
+
   final List<String> gestureLabels = const [
     'OPEN_PALM',
     'FIST',
@@ -274,23 +276,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
     webSocketService.statusText.value =
         'Saved $selectedGestureLabel sample (${getSampleCountByLabel(selectedGestureLabel)})';
-  }
-
-  String buildCsvText() {
-    final headers = <String>['label'];
-
-    for (int i = 0; i < 21; i++) {
-      headers.add('x$i');
-      headers.add('y$i');
-      headers.add('z$i');
-    }
-
-    final rows = [
-      headers.join(','),
-      ...trainingSamples.map((row) => row.join(',')),
-    ];
-
-    return rows.join('\n');
   }
 
   Future<void> exportCsvMock() async {
@@ -757,5 +742,3 @@ class _GestureControlPageState extends State<GestureControlPage> {
     );
   }
 }
-
-final TrainingSampleService trainingService = TrainingSampleService();
