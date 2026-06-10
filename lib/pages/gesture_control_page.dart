@@ -742,8 +742,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
             Text(
               isDetecting
-                  ? 'Detected Hands: $detectedHandCount | Landmark Features: ${latestLandmarkFeatures.length}'
-                  : 'Detection is stopped',
+                ? 'Detected Hands: $detectedHandCount | Gesture: $latestGesture | Landmark Features: ${latestLandmarkFeatures.length}'
+                : 'Detection is stopped',
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
 
