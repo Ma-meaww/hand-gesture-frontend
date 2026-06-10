@@ -87,15 +87,27 @@ class WebSocketService {
       return;
     }
 
-    final data = {
-      'type': 'command',
-      'command': command,
-      'gesture': gesture,
-      'x': x,
-      'y': y,
-      'text': text,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    };
+    final data = <String, dynamic>{
+    'type': 'command',
+    'command': command,
+    'timestamp': DateTime.now().millisecondsSinceEpoch,
+  };
+
+  if (gesture != null && gesture.trim().isNotEmpty) {
+    data['gesture'] = gesture.trim();
+  }
+
+  if (x != null) {
+    data['x'] = x;
+  }
+
+  if (y != null) {
+    data['y'] = y;
+  }
+
+  if (text != null && text.trim().isNotEmpty) {
+    data['text'] = text.trim();
+  }
 
     _channel!.sink.add(jsonEncode(data));
     statusText.value = 'Sent: $command';
