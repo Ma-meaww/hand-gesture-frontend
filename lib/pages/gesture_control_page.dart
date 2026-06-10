@@ -227,11 +227,13 @@ class _GestureControlPageState extends State<GestureControlPage> {
         }
       }
 
+      final processedFeatures = smoothLandmarkFeatures(features);
+
       if (!mounted) return;
 
       setState(() {
         detectedHandCount = hands.length;
-        latestLandmarkFeatures = features;
+        latestLandmarkFeatures = processedFeatures;
       });
     } catch (e) {
       debugPrint('Hand detection error: $e');
