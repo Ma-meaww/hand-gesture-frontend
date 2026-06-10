@@ -166,8 +166,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
       isRecording = false;
       detectedHandCount = 0;
       latestLandmarkFeatures = [];
+      latestGesture = 'UNKNOWN';
     });
 
+    landmarkFeatureHistory.clear();
     webSocketService.statusText.value = 'Hand detection stopped';
   }
 
