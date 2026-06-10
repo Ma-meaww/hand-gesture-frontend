@@ -168,6 +168,38 @@ class _GestureControlPageState extends State<GestureControlPage> {
     webSocketService.statusText.value = 'Hand detection stopped';
   }
 
+  List<double> smoothLandmarkFeatures(List<double> features) {
+    if (features.length != 63) {
+      landmarkFeatureHistory.clear();
+      return features;
+    }
+
+    final configuredWindow =
+        gestureSettingsService.mapping.value.smoothingWindow.round();
+
+    final windowSize = configuredWindow < 1 ? 1 : configuredWindow;
+
+    landmarkFeatureHistory.add(List<double>.from(features));
+
+    while (landmarkFeatureHistory.length > windowSize) {
+      landmarkFeatureHistory.removeAt(0);
+    }
+
+    final smoothedFeatures = List<double>.filled(features.length, 0);
+
+    for (final sample in landmarkFeatureHistory) {
+      for (int i = 0; i < sample.length; i++) {
+        smoothedFeatures[i] += sample[i];
+      }
+    }
+
+    for (int i = 0; i < smoothedFeatures.length; i++) {
+      smoothedFeatures[i] = smoothedFeatures[i] / landmarkFeatureHistory.length;
+    }
+
+    return smoothedFeatures;
+  }
+
   Future<void> processCameraImage(CameraImage image) async {
     if (isProcessingFrame ||
         handLandmarkerPlugin == null ||
