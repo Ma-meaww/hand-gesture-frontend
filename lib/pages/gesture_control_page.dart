@@ -17,7 +17,6 @@ class GestureControlPage extends StatefulWidget {
 }
 
 class _GestureControlPageState extends State<GestureControlPage> {
-  final TrainingSampleService trainingService = TrainingSampleService();
   CameraController? cameraController;
   Future<void>? initializeCameraFuture;
 
@@ -758,3 +757,5 @@ class _GestureControlPageState extends State<GestureControlPage> {
     );
   }
 }
+
+final TrainingSampleService trainingService = TrainingSampleService();
