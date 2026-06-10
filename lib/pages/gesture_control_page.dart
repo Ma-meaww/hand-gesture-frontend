@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hand_landmarker/hand_landmarker.dart';
 
-import '../main.dart';
+import '../services/camera_service.dart';
 import '../services/websocket_service.dart';
 
 class GestureControlPage extends StatefulWidget {
@@ -51,15 +51,12 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   Future<void> setupCamera() async {
     try {
-      if (cameras.isEmpty) {
+      final selectedCamera = cameraService.frontCamera;
+
+      if (selectedCamera == null) {
         webSocketService.statusText.value = 'ไม่พบกล้องในอุปกรณ์นี้';
         return;
       }
-
-      final selectedCamera = cameras.firstWhere(
-        (camera) => camera.lensDirection == CameraLensDirection.front,
-        orElse: () => cameras.first,
-      );
 
       cameraController = CameraController(
         selectedCamera,

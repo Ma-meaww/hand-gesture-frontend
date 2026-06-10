@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
 
 import 'pages/gesture_control_page.dart';
 import 'pages/voice_command_page.dart';
 import 'pages/settings_page.dart';
 import 'services/camera_service.dart';
 
-List<CameraDescription> cameras = [];
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
