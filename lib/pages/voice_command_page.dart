@@ -58,12 +58,12 @@ class _VoiceCommandPageState extends State<VoiceCommandPage> {
   // กดครั้งแรก = เริ่มฟังเสียง
   // กดอีกครั้ง = หยุดฟังเสียง
   Future<void> toggleListening() async {
-    print('Mic button pressed');
+    debugPrint('Mic button pressed');
 
     if (!isListening) {
       final available = await speech.initialize(
         onStatus: (status) {
-          print('Speech status: $status');
+          debugPrint('Speech status: $status');
 
           // แก้: ไม่อัปเดต textBeforeListening ตรงนี้แล้ว
           // เพราะถ้าอัปเดตตอน speech status เปลี่ยน อาจทำให้ข้อความซ้อนหรือเพี้ยนได้
@@ -76,7 +76,7 @@ class _VoiceCommandPageState extends State<VoiceCommandPage> {
           }
         },
         onError: (error) {
-          print('Speech error: ${error.errorMsg}');
+          debugPrint('Speech error: ${error.errorMsg}');
 
           String message = 'เกิดข้อผิดพลาดจากไมค์';
 
