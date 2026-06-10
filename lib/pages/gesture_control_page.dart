@@ -238,8 +238,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
       setState(() {
         detectedHandCount = hands.length;
         latestLandmarkFeatures = processedFeatures;
-        handleDetectedGesture(detectedGesture);
+        latestGesture = detectedGesture;
       });
+
+      handleDetectedGesture(detectedGesture);
     } catch (e) {
       debugPrint('Hand detection error: $e');
     } finally {
