@@ -9,6 +9,7 @@ import '../services/camera_service.dart';
 import '../services/websocket_service.dart';
 import '../services/training_sample_service.dart';
 import '../services/gesture_settings_service.dart';
+import '../services/gesture_classifier_service.dart';
 
 class GestureControlPage extends StatefulWidget {
   const GestureControlPage({super.key});
@@ -38,7 +39,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
   final TrainingSampleService trainingService = TrainingSampleService();
   final Map<String, int> lastGestureCommandSentAt = {};
   final List<List<double>> landmarkFeatureHistory = [];
+  final GestureClassifierService gestureClassifier = GestureClassifierService();
 
+  String latestGesture = 'UNKNOWN';
   final List<String> gestureLabels = const [
     'OPEN_PALM',
     'FIST',
