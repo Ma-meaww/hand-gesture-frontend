@@ -36,6 +36,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
   Timer? recordingTimer;
 
   final TrainingSampleService trainingService = TrainingSampleService();
+  final Map<String, int> lastGestureCommandSentAt = {};
 
   final List<String> gestureLabels = const [
     'OPEN_PALM',
@@ -324,6 +325,19 @@ class _GestureControlPageState extends State<GestureControlPage> {
       webSocketService.statusText.value = 'No command mapped for $gesture';
       return;
     }
+
+    final mapping = gestureSettingsService.mapping.value;
+    final debounceMs = mapping.debounceTime.round();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final lastSentAt = lastGestureCommandSentAt[gesture];
+
+    if (lastSentAt != null && now - lastSentAt < debounceMs) {
+      webSocketService.statusText.value =
+          'Ignored $gesture: debounce active (${debounceMs}ms)';
+      return;
+    }
+
+    lastGestureCommandSentAt[gesture] = now;
 
     webSocketService.sendCommand(
       command: command,
