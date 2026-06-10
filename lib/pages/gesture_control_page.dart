@@ -706,42 +706,57 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
             const SizedBox(height: 12),
 
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              alignment: WrapAlignment.center,
-              children: [
-                commandButton(
-                  label: 'Scroll Up',
-                  command: 'SCROLL_UP',
-                  gesture: 'OPEN_PALM_UP',
-                ),
-                commandButton(
-                  label: 'Scroll Down',
-                  command: 'SCROLL_DOWN',
-                  gesture: 'OPEN_PALM_DOWN',
-                ),
-                commandButton(
-                  label: 'Click',
-                  command: 'CLICK',
-                  gesture: 'PINCH',
-                ),
-                commandButton(
-                  label: 'Confirm',
-                  command: 'CONFIRM',
-                  gesture: 'PINCH_CONFIRM',
-                ),
-                commandButton(
-                  label: 'Open ThaiJO',
-                  command: 'OPEN_THAIJO',
-                  gesture: 'FIST_HOLD',
-                ),
-                commandButton(
-                  label: 'Close Browser',
-                  command: 'CLOSE_BROWSER',
-                  gesture: 'CLOSE_BROWSER',
-                ),
-              ],
+            ValueListenableBuilder(
+              valueListenable: gestureSettingsService.mapping,
+              builder: (context, mapping, child) {
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    commandButton(
+                      label: 'Open Palm Up',
+                      command: mapping.openPalmUpCommand,
+                      gesture: 'OPEN_PALM_UP',
+                    ),
+                    commandButton(
+                      label: 'Open Palm Down',
+                      command: mapping.openPalmDownCommand,
+                      gesture: 'OPEN_PALM_DOWN',
+                    ),
+                    commandButton(
+                      label: 'Open Palm Right',
+                      command: mapping.openPalmRightCommand,
+                      gesture: 'OPEN_PALM_RIGHT',
+                    ),
+                    commandButton(
+                      label: 'Open Palm Left',
+                      command: mapping.openPalmLeftCommand,
+                      gesture: 'OPEN_PALM_LEFT',
+                    ),
+                    commandButton(
+                      label: 'Two Finger',
+                      command: mapping.twoFingerCommand,
+                      gesture: 'TWO_FINGER',
+                    ),
+                    commandButton(
+                      label: 'Fist',
+                      command: mapping.fistCommand,
+                      gesture: 'FIST',
+                    ),
+                    commandButton(
+                      label: 'Pinch',
+                      command: mapping.pinchCommand,
+                      gesture: 'PINCH',
+                    ),
+                    commandButton(
+                      label: 'Close Browser',
+                      command: 'CLOSE_BROWSER',
+                      gesture: 'CLOSE_BROWSER',
+                    ),
+                  ],
+                );
+              },
             ),
 
             const SizedBox(height: 16),
