@@ -742,6 +742,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
                   command: 'OPEN_THAIJO',
                   gesture: 'FIST_HOLD',
                 ),
+                commandButton(
+                  label: 'Close Browser',
+                  command: 'CLOSE_BROWSER',
+                  gesture: 'CLOSE_BROWSER',
+                ),
               ],
             ),
 
