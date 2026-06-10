@@ -7,6 +7,7 @@ import 'package:hand_landmarker/hand_landmarker.dart';
 
 import '../services/camera_service.dart';
 import '../services/websocket_service.dart';
+import '../services/training_sample_service.dart';
 
 class GestureControlPage extends StatefulWidget {
   const GestureControlPage({super.key});
@@ -16,6 +17,7 @@ class GestureControlPage extends StatefulWidget {
 }
 
 class _GestureControlPageState extends State<GestureControlPage> {
+  final TrainingSampleService trainingService = TrainingSampleService();
   CameraController? cameraController;
   Future<void>? initializeCameraFuture;
 
@@ -32,7 +34,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
   String selectedGestureLabel = 'OPEN_PALM';
 
   Timer? recordingTimer;
-  final List<List<String>> trainingSamples = [];
 
   final List<String> gestureLabels = const [
     'OPEN_PALM',
@@ -203,12 +204,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
     }
   }
 
-  int get totalSampleCount => trainingSamples.length;
+  int get totalSampleCount => trainingService.totalSampleCount;
 
   int getSampleCountByLabel(String label) {
-    return trainingSamples
-        .where((row) => row.isNotEmpty && row.first == label)
-        .length;
+    return trainingService.getSampleCountByLabel(label);
   }
 
   void toggleDetection() {
@@ -267,12 +266,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
       return;
     }
 
-    final List<String> row = [
-      selectedGestureLabel,
-      ...latestLandmarkFeatures.map((value) => value.toStringAsFixed(6)),
-    ];
-
-    trainingSamples.add(row);
+    trainingService.addSample(
+      label: selectedGestureLabel,
+      features: latestLandmarkFeatures,
+    );
 
     setState(() {});
 
@@ -298,14 +295,14 @@ class _GestureControlPageState extends State<GestureControlPage> {
   }
 
   Future<void> exportCsvMock() async {
-    if (trainingSamples.isEmpty) {
+    if (trainingService.totalSampleCount == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('ยังไม่มี sample สำหรับ export')),
       );
       return;
     }
 
-    final csvText = buildCsvText();
+    final csvText = trainingService.buildCsvText();
 
     await Clipboard.setData(ClipboardData(text: csvText));
 
@@ -324,7 +321,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
     stopRecording();
 
     setState(() {
-      trainingSamples.clear();
+      trainingService.clear();
     });
 
     webSocketService.statusText.value = 'Training samples cleared';
