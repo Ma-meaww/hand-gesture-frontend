@@ -37,6 +37,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   final TrainingSampleService trainingService = TrainingSampleService();
   final Map<String, int> lastGestureCommandSentAt = {};
+  final List<List<double>> landmarkFeatureHistory = [];
 
   final List<String> gestureLabels = const [
     'OPEN_PALM',
