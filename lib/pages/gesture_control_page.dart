@@ -384,6 +384,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
   }
 
   void handleDetectedGesture(String gesture) {
+    if(isTrainingMode || isRecording) {
+      return;
+    }
+
     if (gesture == 'UNKNOWN') {
       return;
     }
