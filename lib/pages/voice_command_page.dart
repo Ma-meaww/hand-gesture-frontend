@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-// เพิ่ม: import package สำหรับแปลงเสียงเป็นข้อความ
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../services/websocket_service.dart';
@@ -15,18 +14,14 @@ class VoiceCommandPage extends StatefulWidget {
 class _VoiceCommandPageState extends State<VoiceCommandPage> {
   final TextEditingController textController = TextEditingController();
 
-  // เพิ่ม: ตัวแปรสำหรับใช้งาน Speech-to-Text
   final stt.SpeechToText speech = stt.SpeechToText();
 
-  // เพิ่ม: เช็กว่าตอนนี้กำลังฟังเสียงอยู่ไหม
   bool isListening = false;
 
-  // เพิ่ม: เก็บข้อความเดิมก่อนเริ่มกดไมค์รอบใหม่
   String textBeforeListening = '';
 
   @override
   void dispose() {
-    // เพิ่ม: หยุดไมค์ก่อนออกจากหน้านี้
     speech.stop();
 
     textController.dispose();
@@ -54,9 +49,6 @@ class _VoiceCommandPageState extends State<VoiceCommandPage> {
     );
   }
 
-  // เพิ่ม: ฟังก์ชันกดไมค์
-  // กดครั้งแรก = เริ่มฟังเสียง
-  // กดอีกครั้ง = หยุดฟังเสียง
   Future<void> toggleListening() async {
     debugPrint('Mic button pressed');
 
@@ -65,8 +57,6 @@ class _VoiceCommandPageState extends State<VoiceCommandPage> {
         onStatus: (status) {
           debugPrint('Speech status: $status');
 
-          // แก้: ไม่อัปเดต textBeforeListening ตรงนี้แล้ว
-          // เพราะถ้าอัปเดตตอน speech status เปลี่ยน อาจทำให้ข้อความซ้อนหรือเพี้ยนได้
           if (status == 'done' || status == 'notListening') {
             if (mounted) {
               setState(() {
@@ -99,9 +89,6 @@ class _VoiceCommandPageState extends State<VoiceCommandPage> {
         return;
       }
 
-      // เพิ่ม: เก็บข้อความเดิมก่อนเริ่มฟังรอบใหม่
-      // เช่น ตอนนี้มี "hello" อยู่ในช่อง
-      // พอกดไมค์แล้วพูด "world" จะกลายเป็น "hello world"
       textBeforeListening = textController.text.trimRight();
 
       setState(() {
@@ -117,9 +104,6 @@ class _VoiceCommandPageState extends State<VoiceCommandPage> {
         partialResults: true,
         cancelOnError: true,
 
-        // แก้: เดิมใช้ textController.text = result.recognizedWords;
-        // ทำให้ข้อความเก่าถูกลบ
-        // ตอนนี้เปลี่ยนเป็นเอาข้อความเดิม + ข้อความที่พูดใหม่มาต่อกัน
         onResult: (result) {
           final spokenText = result.recognizedWords.trim();
 
@@ -165,18 +149,6 @@ class _VoiceCommandPageState extends State<VoiceCommandPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            /*
-              ลบของเดิมออก:
-
-              const Icon(
-                Icons.mic,
-                size: 80,
-              ),
-
-              เพราะมันเป็นแค่รูปไอคอน กดไม่ได้
-            */
-
-            // เพิ่มใหม่: ทำไอคอนไมค์ให้เป็นปุ่มกดได้
             InkWell(
               onTap: toggleListening,
               borderRadius: BorderRadius.circular(60),

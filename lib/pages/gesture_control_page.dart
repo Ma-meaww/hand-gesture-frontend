@@ -794,6 +794,19 @@ class _GestureControlPageState extends State<GestureControlPage> {
               ],
             ),
 
+            const SizedBox(height: 8),
+
+            Text(
+              isDetecting
+                  ? 'Auto gesture control is active. Hand gestures can send commands automatically.'
+                  : 'Press Start Detection to enable auto gesture control.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.black54,
+              ),
+            ),
+
             const SizedBox(height: 12),
 
             SizedBox(
@@ -815,7 +828,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
             const SizedBox(height: 20),
 
             const Text(
-              'Mock Gesture Commands',
+              'Manual Test Commands',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
 
