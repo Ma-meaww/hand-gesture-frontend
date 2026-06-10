@@ -372,7 +372,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
         foregroundColor: Colors.white,
       ),
       onPressed: () {
-        sendGestureCommand(command: command, gesture: gesture);
+        sendMappedGestureCommand(command: command, gesture: gesture);
       },
       child: Text(label),
     );
