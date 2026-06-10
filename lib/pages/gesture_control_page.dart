@@ -8,6 +8,7 @@ import 'package:hand_landmarker/hand_landmarker.dart';
 import '../services/camera_service.dart';
 import '../services/websocket_service.dart';
 import '../services/training_sample_service.dart';
+import '../services/gesture_settings_service.dart';
 
 class GestureControlPage extends StatefulWidget {
   const GestureControlPage({super.key});
@@ -313,6 +314,21 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   void sendGestureCommand({required String command, required String gesture}) {
     webSocketService.sendCommand(command: command, gesture: gesture);
+  }
+
+  void sendMappedGestureCommand({
+    required String command,
+    required String gesture,
+  }) {
+    if (command == 'NONE') {
+      webSocketService.statusText.value = 'No command mapped for $gesture';
+      return;
+    }
+
+    webSocketService.sendCommand(
+      command: command,
+      gesture: gesture,
+    );
   }
 
   void sendMacro() {
