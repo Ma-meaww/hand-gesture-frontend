@@ -379,6 +379,65 @@ class _GestureControlPageState extends State<GestureControlPage> {
     );
   }
 
+  void handleDetectedGesture(String gesture) {
+    if (gesture == 'UNKNOWN') {
+      return;
+    }
+
+    final mapping = gestureSettingsService.mapping.value;
+
+    switch (gesture) {
+      case 'OPEN_PALM_UP':
+        sendMappedGestureCommand(
+          command: mapping.openPalmUpCommand,
+          gesture: gesture,
+        );
+        break;
+
+      case 'OPEN_PALM_DOWN':
+        sendMappedGestureCommand(
+          command: mapping.openPalmDownCommand,
+          gesture: gesture,
+        );
+        break;
+
+      case 'OPEN_PALM_RIGHT':
+        sendMappedGestureCommand(
+          command: mapping.openPalmRightCommand,
+          gesture: gesture,
+        );
+        break;
+
+      case 'OPEN_PALM_LEFT':
+        sendMappedGestureCommand(
+          command: mapping.openPalmLeftCommand,
+          gesture: gesture,
+        );
+        break;
+
+      case 'TWO_FINGER':
+        sendMappedGestureCommand(
+          command: mapping.twoFingerCommand,
+          gesture: gesture,
+        );
+        break;
+
+      case 'FIST':
+        sendMappedGestureCommand(
+          command: mapping.fistCommand,
+          gesture: gesture,
+        );
+        break;
+
+      case 'PINCH':
+        sendMappedGestureCommand(
+          command: mapping.pinchCommand,
+          gesture: gesture,
+        );
+        break;
+    }
+  }
+
   void sendMacro() {
     webSocketService.sendCommand(command: 'OPEN_THAIJO', gesture: 'MACRO');
   }
