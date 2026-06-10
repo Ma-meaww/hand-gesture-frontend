@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'websocket_service.dart';
+import '../services/websocket_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});

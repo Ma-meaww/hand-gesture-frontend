@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
-import 'gesture_control_page.dart';
-import 'voice_command_page.dart';
-import 'settings_page.dart';
+import 'pages/gesture_control_page.dart';
+import 'pages/voice_command_page.dart';
+import 'pages/settings_page.dart';
 
 List<CameraDescription> cameras = [];
 

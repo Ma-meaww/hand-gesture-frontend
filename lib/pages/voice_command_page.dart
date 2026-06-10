@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 // เพิ่ม: import package สำหรับแปลงเสียงเป็นข้อความ
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
-import 'websocket_service.dart';
+import '../services/websocket_service.dart';
 
 class VoiceCommandPage extends StatefulWidget {
   const VoiceCommandPage({super.key});
