@@ -313,10 +313,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
     webSocketService.statusText.value = 'Training samples cleared';
   }
 
-  void sendGestureCommand({required String command, required String gesture}) {
-    webSocketService.sendCommand(command: command, gesture: gesture);
-  }
-
   void sendMappedGestureCommand({
     required String command,
     required String gesture,
