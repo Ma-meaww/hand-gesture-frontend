@@ -12,37 +12,41 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                       THIS REPO (Flutter)                       │
+│                      THIS REPO (Flutter)                        │
 │                                                                 │
-│   Camera  →  MediaPipe  →  Gesture Detector  →  Command Builder │
-│                             (Hand Landmarks)                    │
+│  Camera  →  hand_tracking_service.dart                          │
+│              │                                                  │
+│              ▼                                                  │
+│         gesture_classifier_service.dart  ←  gesture_mapping.dart│
+│              │                                                  │
+│              ▼                                                  │
+│         websocket_service.dart  ──→  command_message.dart       │
 │                                                                 │
-│   Microphone  →  Speech-to-Text  →  Text input for ThaiJO      │
+│  Microphone  →  voice_service.dart  →  TEXT  →  websocket       │
 │                                                                 │
-│   UI Screen  →  Connect Screen (IP input)                       │
-│             →  Control Screen (gesture feedback + status)       │
-│                                                                 │
-│   WebSocket Client  ──→  ws://192.168.x.x:8765                  │
-└───────────────────────────────────┬─────────────────────────────┘
-                                    │  Wi-Fi
-                                    ▼
-                     hand-gesture-pc-controller
-                      (Python WebSocket Server)
+│  Pages:  gesture_control_page  |  settings_page  |  voice_command_page │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │  Wi-Fi  ws://192.168.x.x:8765
+                                ▼
+                   hand-gesture-pc-controller
+                    (Python WebSocket Server)
 ```
 
 ---
 
 ## Gesture → Command Mapping
 
-| ท่ามือ (Gesture)              | Command ที่ส่ง         | ผลลัพธ์บนคอม              |
-|------------------------------|----------------------|--------------------------|
-| ชี้นิ้วชี้ + ขยับมือ         | `CURSOR_MOVE`        | เลื่อนเมาส์              |
-| Pinch (นิ้วชี้ + นิ้วโป้ง)   | `CLICK`              | คลิกซ้าย                 |
-| Pinch ค้าง                   | `CONFIRM`            | กด Enter                 |
-| ฝ่ามือหันลง + เลื่อนลง       | `SCROLL_DOWN`        | Scroll หน้าลง            |
-| ฝ่ามือหันขึ้น + เลื่อนขึ้น   | `SCROLL_UP`          | Scroll หน้าขึ้น          |
-| ปุ่ม Voice บนหน้าจอ           | `THAIJO_INPUT_SEARCH` | ส่งข้อความจาก STT        |
-| ปุ่ม ThaiJO บนหน้าจอ         | `OPEN_THAIJO`        | เปิดเว็บ ThaiJO          |
+| ท่ามือ (Gesture)               | Command ที่ส่ง          | ผลลัพธ์บนคอม              |
+|-------------------------------|------------------------|--------------------------|
+| ชี้นิ้วชี้ + ขยับมือ          | `CURSOR_MOVE`          | เลื่อนเมาส์              |
+| Pinch (นิ้วชี้ + นิ้วโป้ง)    | `CLICK`                | คลิกซ้าย                 |
+| Pinch ค้าง                    | `CONFIRM`              | กด Enter                 |
+| ฝ่ามือหันลง + เลื่อนลง        | `SCROLL_DOWN`          | Scroll หน้าลง            |
+| ฝ่ามือหันขึ้น + เลื่อนขึ้น    | `SCROLL_UP`            | Scroll หน้าขึ้น          |
+| ปุ่ม Voice บนหน้าจอ           | `THAIJO_INPUT_SEARCH`  | ส่งข้อความจาก STT        |
+| ปุ่ม ThaiJO บนหน้าจอ          | `OPEN_THAIJO`          | เปิดเว็บ ThaiJO          |
+
+ดู mapping ทั้งหมดได้ที่ `lib/models/gesture_mapping.dart`
 
 ---
 
@@ -51,20 +55,41 @@
 ```
 hand-gesture-frontend/
 ├── lib/
-│   ├── main.dart                   # Entry point
-│   ├── screens/
-│   │   ├── connect_screen.dart     # หน้าใส่ IP และเชื่อมต่อ
-│   │   └── control_screen.dart     # หน้าหลัก: camera feed + gesture feedback
+│   ├── main.dart
+│   │
+│   ├── config/
+│   │   └── app_config.dart              # WebSocket URL, timeout, ค่าคงที่
+│   │
+│   ├── models/
+│   │   ├── command_message.dart         # โครงสร้าง JSON ที่ส่งไป backend
+│   │   └── gesture_mapping.dart        # ตาราง gesture → command
+│   │
+│   ├── pages/
+│   │   ├── gesture_control_page.dart   # หน้าหลัก: camera feed + gesture HUD
+│   │   ├── settings_page.dart          # ตั้งค่า IP, sensitivity, gesture
+│   │   └── voice_command_page.dart     # หน้า Voice-to-Text สำหรับ ThaiJO
+│   │
 │   ├── services/
-│   │   ├── websocket_service.dart  # WebSocket client
-│   │   └── speech_service.dart     # Speech-to-Text
-│   └── gesture/
-│       └── gesture_detector.dart   # แปลง hand landmarks → command
+│   │   ├── camera_service.dart                # เปิด/ปิดกล้อง, stream frames
+│   │   ├── gesture_classifier_service.dart    # แปลง landmarks → gesture name
+│   │   ├── gesture_settings_service.dart      # โหลด/บันทึก gesture config
+│   │   ├── hand_tracking_service.dart         # MediaPipe hand landmarks
+│   │   ├── training_sample_service.dart       # เก็บ sample สำหรับ training
+│   │   ├── voice_service.dart                 # Speech-to-Text
+│   │   └── websocket_service.dart             # WebSocket client + reconnect
+│   │
+│   └── widgets/
+│       ├── command_button.dart          # ปุ่มส่ง command แบบ manual
+│       ├── connection_status_card.dart  # แสดงสถานะการเชื่อมต่อ
+│       └── training_panel.dart         # UI สำหรับ collect training data
 │
-├── android/                        # Android-specific config
-├── assets/images/                  # ไอคอนและรูปภาพ
-├── pubspec.yaml
-└── PROTOCOL.md  ← ดู hand-gesture-pc-controller/PROTOCOL.md
+├── dev_tools/
+│   └── mock_ws_server.py               # Mock WebSocket server สำหรับทดสอบ Flutter โดยไม่ต้องเปิดคอม
+│
+├── assets/images/                      # ไอคอนและรูปภาพ
+├── test/
+│   └── widget_test.dart
+└── pubspec.yaml
 ```
 
 ---
@@ -73,64 +98,57 @@ hand-gesture-frontend/
 
 - Flutter 3.x
 - Android 8.0 (API 26) ขึ้นไป
+- ทดสอบบนอุปกรณ์จริงเท่านั้น (ต้องใช้กล้องจริง)
 - มือถือและคอมอยู่ Wi-Fi เดียวกัน
-- ติดตั้ง [hand-gesture-pc-controller](https://github.com/Ma-meaww/hand-gesture-pc-controller) และ run server บนคอมก่อน
-
----
-
-## Dependencies หลัก (`pubspec.yaml`)
-
-| Package | ใช้ทำอะไร |
-|---------|-----------|
-| `camera` | เปิดกล้องและ stream frames |
-| `google_mlkit_pose_detection` หรือ MediaPipe plugin | ตรวจจับ hand landmarks |
-| `web_socket_channel` | WebSocket client |
-| `speech_to_text` | Voice-to-Text สำหรับ ThaiJO search |
+- รัน [hand-gesture-pc-controller](https://github.com/Ma-meaww/hand-gesture-pc-controller) บนคอมก่อน
 
 ---
 
 ## Installation & Run
 
 ```bash
-# ติดตั้ง dependencies
 flutter pub get
 
-# รันบนอุปกรณ์จริง (แนะนำ — ต้องใช้กล้องจริง)
+# รันบนอุปกรณ์จริง
 flutter run
 
 # Build APK
 flutter build apk --release
 ```
 
-> ⚠️ ต้องทดสอบบนอุปกรณ์จริงเท่านั้น เพราะต้องใช้กล้องและอยู่บน Wi-Fi เดียวกับคอม
+**ทดสอบโดยไม่ต้องเปิดคอม (ใช้ mock server)**
+```bash
+# เปิด terminal บนคอม
+python dev_tools/mock_ws_server.py
+# แล้วใส่ IP คอมใน Settings ของแอป
+```
 
 ---
 
 ## วิธีใช้งาน
 
-1. รัน `python main.py` บนคอมพิวเตอร์ก่อน ([hand-gesture-pc-controller](https://github.com/Ma-meaww/hand-gesture-pc-controller))
-2. เปิดแอปบนมือถือ
-3. กรอก IP ของคอม เช่น `192.168.1.42` (port `8765`)
-4. กด Connect
-5. ยกมือขึ้นให้กล้องเห็น — แอปจะแสดง gesture ที่ตรวจพบและ status การส่งคำสั่ง
+1. รัน `python main.py` บนคอมพิวเตอร์ก่อน
+2. เปิดแอป → ไปที่ Settings → กรอก IP ของคอม (เช่น `192.168.1.42`)
+3. กลับหน้าหลัก → กด Connect
+4. ยกมือขึ้นให้กล้องเห็น — แอปจะแสดง gesture ที่ตรวจพบและสถานะ ACK
 
 ---
 
-## ThaiJO Search Flow
+## ThaiJO Flow
 
 ```
-1. กดปุ่ม ThaiJO บนหน้าจอ    →  ส่ง OPEN_THAIJO
-2. กดปุ่ม Voice แล้วพูด       →  STT แปลงเป็นข้อความ
-3. แอปส่ง THAIJO_INPUT_SEARCH  →  คำค้นพิมพ์ใน browser บนคอม
-4. ทำท่า Pinch ค้าง            →  ส่ง THAIJO_SUBMIT_SEARCH → กดค้นหา
-5. ใช้ท่า CURSOR_MOVE + CLICK  →  เลือกบทความบนคอม
+1. กดปุ่ม ThaiJO          →  ส่ง OPEN_THAIJO
+2. กดปุ่ม Voice แล้วพูด   →  STT แปลงเป็นข้อความ
+3. แอปส่ง THAIJO_INPUT_SEARCH (พร้อม text)
+4. ทำท่า Pinch ค้าง        →  ส่ง THAIJO_SUBMIT_SEARCH
+5. ใช้ท่า CURSOR_MOVE + CLICK เลือกบทความบนคอม
 ```
 
 ---
 
 ## WebSocket Protocol
 
-รูปแบบ JSON ที่แอปส่งไป:
+รูปแบบ JSON ที่แอปส่ง (ดูโครงสร้างใน `lib/models/command_message.dart`):
 
 ```json
 {
@@ -144,10 +162,10 @@ flutter build apk --release
 }
 ```
 
-รายละเอียดเต็มดูได้ที่ [PROTOCOL.md](https://github.com/Ma-meaww/hand-gesture-pc-controller/blob/main/PROTOCOL.md) ใน repo backend
+รายละเอียดเต็มดูได้ที่ [PROTOCOL.md](https://github.com/Ma-meaww/hand-gesture-pc-controller/blob/main/PROTOCOL.md)
 
 ---
 
 ## Related
 
-- [hand-gesture-pc-controller](https://github.com/Ma-meaww/hand-gesture-pc-controller) — Python backend ที่รับคำสั่งและควบคุมคอม
+- [hand-gesture-pc-controller](https://github.com/Ma-meaww/hand-gesture-pc-controller) — Python backend
