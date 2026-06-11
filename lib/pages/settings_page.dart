@@ -11,11 +11,8 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final TextEditingController ipController =
-      TextEditingController(text: '10.0.2.2'); // windown 127.0.0.1
-
-  final TextEditingController portController =
-      TextEditingController(text: '8765');
+  late final TextEditingController ipController;
+  late final TextEditingController portController;
 
   String openPalmUpCommand = 'SCROLL_UP';
   String openPalmDownCommand = 'SCROLL_DOWN';
@@ -37,6 +34,14 @@ class _SettingsPageState extends State<SettingsPage> {
     DropdownMenuItem(value: 'THAIJO_SUBMIT_SEARCH', child: Text('Submit ThaiJO Search')),
     DropdownMenuItem(value: 'NONE', child: Text('None')),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    ipController = TextEditingController(text: webSocketService.lastIp);
+    portController = TextEditingController(text: webSocketService.lastPort);
+  }
 
   @override
   void dispose() {

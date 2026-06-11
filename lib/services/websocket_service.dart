@@ -12,11 +12,20 @@ class WebSocketService {
   final ValueNotifier<String> statusText = ValueNotifier('Not connected');
   final ValueNotifier<String> lastAck = ValueNotifier('-');
 
+  String lastIp = '10.0.2.2';
+  String lastPort = '8765';
+
   Future<void> connect({
     required String ip,
     required String port,
   }) async {
-    final url = 'ws://$ip:$port';
+    final cleanIp = ip.trim();
+    final cleanPort = port.trim();
+
+    lastIp = cleanIp;
+    lastPort = cleanPort;
+
+    final url = 'ws://$cleanIp:$cleanPort';
 
     try {
       statusText.value = 'Connecting to $url...';

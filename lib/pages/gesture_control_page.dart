@@ -138,7 +138,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
     if (handLandmarkerPlugin == null) {
       webSocketService.statusText.value =
           'Hand Landmarker not ready: test on real Android phone later';
-      return;
     }
 
     if (cameraController!.value.isStreamingImages) {
