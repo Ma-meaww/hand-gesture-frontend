@@ -574,7 +574,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
           const SizedBox(height: 12),
 
           DropdownButtonFormField<String>(
-            value: selectedGestureLabel,
+            initialValue: selectedGestureLabel,
             decoration: const InputDecoration(
               labelText: 'Gesture Label',
               border: OutlineInputBorder(),
