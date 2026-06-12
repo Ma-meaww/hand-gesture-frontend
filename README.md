@@ -1,4 +1,4 @@
-# hand-gesture-frontend
+# hand-gesture-frontenddddd
 
 แอป Flutter (Android) สำหรับโปรเจกต์ **ระบบควบคุมคอมพิวเตอร์ด้วยท่าทางมือผ่านสมาร์ตโฟน**
 
