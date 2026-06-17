@@ -1,6 +1,6 @@
 class GestureMapping {
   String oneFingerCommand;
-  String pinchCommand;
+  String thumbCommand;
   String openPalmUpCommand;
   String openPalmDownCommand;
   String fistCommand;
@@ -11,7 +11,7 @@ class GestureMapping {
 
   GestureMapping({
     this.oneFingerCommand = 'CURSOR_MOVE',
-    this.pinchCommand = 'CLICK',
+    this.thumbCommand = 'CLICK',
     this.openPalmUpCommand = 'SCROLL_UP',
     this.openPalmDownCommand = 'SCROLL_DOWN',
     this.fistCommand = 'OPEN_THAIJO',
@@ -23,10 +23,10 @@ class GestureMapping {
   factory GestureMapping.defaults() {
     return GestureMapping(
       oneFingerCommand: 'CURSOR_MOVE',
-      pinchCommand: 'CLICK',
+      thumbCommand: 'CLICK',
+      fistCommand: 'OPEN_THAIJO',
       openPalmUpCommand: 'SCROLL_UP',
       openPalmDownCommand: 'SCROLL_DOWN',
-      fistCommand: 'OPEN_THAIJO',
       twoFingerCommand: 'THAIJO_SUBMIT_SEARCH',
       smoothingWindow: 5,
       debounceTime: 300,
@@ -37,8 +37,8 @@ class GestureMapping {
     switch (gesture) {
       case 'ONE_FINGER':
         return oneFingerCommand;
-      case 'PINCH':
-        return pinchCommand;
+      case 'THUMB':
+        return thumbCommand;
       case 'OPEN_PALM_UP':
         return openPalmUpCommand;
       case 'OPEN_PALM_DOWN':

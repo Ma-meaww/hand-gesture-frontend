@@ -15,7 +15,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController portController;
 
   String oneFingerCommand = 'CURSOR_MOVE';
-  String pinchCommand = 'CLICK';
+  String thumbCommand = 'CLICK';
   String openPalmUpCommand = 'SCROLL_UP';
   String openPalmDownCommand = 'SCROLL_DOWN';
   String fistCommand = 'OPEN_THAIJO';
@@ -49,7 +49,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final mapping = gestureSettingsService.mapping.value;
 
     oneFingerCommand = mapping.oneFingerCommand;
-    pinchCommand = mapping.pinchCommand;
+    thumbCommand = mapping.thumbCommand;
     openPalmUpCommand = mapping.openPalmUpCommand;
     openPalmDownCommand = mapping.openPalmDownCommand;
     fistCommand = mapping.fistCommand;
@@ -84,7 +84,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     setState(() {
       oneFingerCommand = mapping.oneFingerCommand;
-      pinchCommand = mapping.pinchCommand;
+      thumbCommand = mapping.thumbCommand;
       openPalmUpCommand = mapping.openPalmUpCommand;
       openPalmDownCommand = mapping.openPalmDownCommand;
       fistCommand = mapping.fistCommand;
@@ -99,7 +99,7 @@ class _SettingsPageState extends State<SettingsPage> {
     gestureSettingsService.update(
       GestureMapping(
         oneFingerCommand: oneFingerCommand,
-        pinchCommand: pinchCommand,
+        thumbCommand: thumbCommand,
         openPalmUpCommand: openPalmUpCommand,
         openPalmDownCommand: openPalmDownCommand,
         fistCommand: fistCommand,
@@ -361,12 +361,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   gestureMappingRow(
                     icon: '👌',
-                    gestureName: 'Pinch / OK Sign',
-                    value: pinchCommand,
+                    gestureName: 'Thumb  / OK Sign',
+                    value: thumbCommand,
                     onChanged: (value) {
                       if (value == null) return;
                       setState(() {
-                        pinchCommand = value;
+                        thumbCommand = value;
                       });
 
                       updateSharedGestureSettings();
@@ -423,8 +423,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     onChanged: (value) {
                       setState(() {
                         smoothingWindow = value;
-                        updateSharedGestureSettings();
                       });
+
+                      updateSharedGestureSettings();
                     },
                   ),
 

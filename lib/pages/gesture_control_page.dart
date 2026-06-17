@@ -31,6 +31,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
   List<double> latestLandmarkFeatures = [];
 
   String latestGesture = 'UNKNOWN';
+  int debugFrameCount = 0;
 
   final List<String> gestureHistory = [];
 
@@ -41,7 +42,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
   // Training Mode
   bool isTrainingMode = false;
   bool isRecording = false;
-  String selectedGestureLabel = 'OPEN_PALM';
+  String selectedGestureLabel = 'ONE_FINGER';
 
   Timer? recordingTimer;
 
@@ -51,18 +52,34 @@ class _GestureControlPageState extends State<GestureControlPage> {
   final GestureClassifierService gestureClassifier = GestureClassifierService();
 
   final List<String> gestureLabels = const [
-    'OPEN_PALM',
-    'FIST',
-    'PINCH',
     'ONE_FINGER',
+    'THUMB',
+    'FIST',
+    'OPEN_PALM_UP',
+    'OPEN_PALM_DOWN',
     'TWO_FINGER',
-    'FIST_HOLD',
   ];
 
   @override
   void initState() {
     super.initState();
-    setupCamera();
+    setupAll();
+  }
+
+  Future<void> setupAll() async {
+    await setupGestureClassifier();
+    await setupCamera();
+  }
+
+  Future<void> setupGestureClassifier() async {
+    try {
+      await gestureClassifier.loadDataset();
+      webSocketService.statusText.value = 'Gesture dataset loaded';
+      debugPrint('Gesture dataset loaded successfully');
+    } catch (e) {
+      webSocketService.statusText.value = 'Gesture dataset load failed';
+      debugPrint('Gesture dataset load error: $e');
+    }
   }
 
   Future<void> setupCamera() async {
@@ -242,35 +259,27 @@ class _GestureControlPageState extends State<GestureControlPage> {
         }
       }
 
-      final rawGesture = classifyGesture(features);
-      final stableGesture = smoothGesture(rawGesture);
-
-      if (stableGesture != 'UNKNOWN') {
-        handleGestureCommand(stableGesture, features);
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        detectedHandCount = hands.length;
-        latestLandmarkFeatures = features;
-        if (stableGesture != 'UNKNOWN') {
-          latestGesture = stableGesture;
-        }
-      });
-
       final processedFeatures = smoothLandmarkFeatures(features);
       final detectedGesture = gestureClassifier.classify(processedFeatures);
+
+      debugFrameCount++;
+      if (debugFrameCount % 30 == 0) {
+        debugPrint(
+          'KNN gesture: $detectedGesture | hands=${hands.length} | features=${processedFeatures.length}',
+        );
+      }
+
+      final stableGesture = smoothGesture(detectedGesture);
 
       if (!mounted) return;
 
       setState(() {
         detectedHandCount = hands.length;
         latestLandmarkFeatures = processedFeatures;
-        latestGesture = detectedGesture;
+        latestGesture = stableGesture;
       });
 
-      handleDetectedGesture(detectedGesture);
+      handleDetectedGesture(stableGesture);
     } catch (e) {
       debugPrint('Hand detection error: $e');
     } finally {
@@ -653,9 +662,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
         );
         break;
 
-      case 'PINCH':
+      case 'THUMB':
         sendMappedGestureCommand(
-          command: mapping.pinchCommand,
+          command: mapping.thumbCommand,
           gesture: gesture,
         );
         break;
@@ -1077,9 +1086,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
                       gesture: 'FIST',
                     ),
                     commandButton(
-                      label: 'Pinch',
-                      command: mapping.pinchCommand,
-                      gesture: 'PINCH',
+                      label: 'Thumb',
+                      command: mapping.thumbCommand,
+                      gesture: 'THUMB',
                     ),
                     commandButton(
                       label: 'Close Browser',
