@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hand_landmarker/hand_landmarker.dart';
 
+import '../app_settings.dart';
 import '../services/camera_service.dart';
 import '../services/websocket_service.dart';
 import '../services/training_sample_service.dart';
@@ -29,10 +30,19 @@ class _GestureControlPageState extends State<GestureControlPage> {
   int detectedHandCount = 0;
   List<double> latestLandmarkFeatures = [];
 
+  String latestGesture = 'UNKNOWN';
+  int debugFrameCount = 0;
+
+  final List<String> gestureHistory = [];
+
+  DateTime? lastCommandSentAt;
+  DateTime? lastCursorMoveSentAt;
+  String lastSentGesture = 'UNKNOWN';
+
   // Training Mode
   bool isTrainingMode = false;
   bool isRecording = false;
-  String selectedGestureLabel = 'OPEN_PALM';
+  String selectedGestureLabel = 'ONE_FINGER';
 
   Timer? recordingTimer;
 
@@ -41,20 +51,35 @@ class _GestureControlPageState extends State<GestureControlPage> {
   final List<List<double>> landmarkFeatureHistory = [];
   final GestureClassifierService gestureClassifier = GestureClassifierService();
 
-  String latestGesture = 'UNKNOWN';
   final List<String> gestureLabels = const [
-    'OPEN_PALM',
-    'FIST',
-    'PINCH',
     'ONE_FINGER',
+    'THUMB',
+    'FIST',
+    'OPEN_PALM_UP',
+    'OPEN_PALM_DOWN',
     'TWO_FINGER',
-    'FIST_HOLD',
   ];
 
   @override
   void initState() {
     super.initState();
-    setupCamera();
+    setupAll();
+  }
+
+  Future<void> setupAll() async {
+    await setupGestureClassifier();
+    await setupCamera();
+  }
+
+  Future<void> setupGestureClassifier() async {
+    try {
+      await gestureClassifier.loadDataset();
+      webSocketService.statusText.value = 'Gesture dataset loaded';
+      debugPrint('Gesture dataset loaded successfully');
+    } catch (e) {
+      webSocketService.statusText.value = 'Gesture dataset load failed';
+      debugPrint('Gesture dataset load error: $e');
+    }
   }
 
   Future<void> setupCamera() async {
@@ -178,8 +203,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
       return features;
     }
 
-    final configuredWindow =
-        gestureSettingsService.mapping.value.smoothingWindow.round();
+    final configuredWindow = gestureSettingsService
+        .mapping
+        .value
+        .smoothingWindow
+        .round();
 
     final windowSize = configuredWindow < 1 ? 1 : configuredWindow;
 
@@ -234,20 +262,233 @@ class _GestureControlPageState extends State<GestureControlPage> {
       final processedFeatures = smoothLandmarkFeatures(features);
       final detectedGesture = gestureClassifier.classify(processedFeatures);
 
+      debugFrameCount++;
+      if (debugFrameCount % 30 == 0) {
+        debugPrint(
+          'KNN gesture: $detectedGesture | hands=${hands.length} | features=${processedFeatures.length}',
+        );
+      }
+
+      final stableGesture = smoothGesture(detectedGesture);
+
       if (!mounted) return;
 
       setState(() {
         detectedHandCount = hands.length;
         latestLandmarkFeatures = processedFeatures;
-        latestGesture = detectedGesture;
+        latestGesture = stableGesture;
       });
 
-      handleDetectedGesture(detectedGesture);
+      handleDetectedGesture(stableGesture);
     } catch (e) {
       debugPrint('Hand detection error: $e');
     } finally {
       isProcessingFrame = false;
     }
+  }
+
+  double landmarkX(List<double> features, int index) {
+    return features[index * 3];
+  }
+
+  double landmarkY(List<double> features, int index) {
+    return features[index * 3 + 1];
+  }
+
+  double distance2D(List<double> features, int a, int b) {
+    final dx = landmarkX(features, a) - landmarkX(features, b);
+    final dy = landmarkY(features, a) - landmarkY(features, b);
+
+    return (dx * dx + dy * dy);
+  }
+
+  bool isFingerExtended(
+    List<double> features, {
+    required int tip,
+    required int pip,
+  }) {
+    return landmarkY(features, tip) < landmarkY(features, pip) - 0.025;
+  }
+
+  bool isFingerFolded(
+    List<double> features, {
+    required int tip,
+    required int pip,
+    required int mcp,
+  }) {
+    final tipToWrist = distance2D(features, tip, 0);
+    final mcpToWrist = distance2D(features, mcp, 0);
+
+    // นิ้วงอจริง = ปลายนิ้วต้องอยู่ใกล้ข้อมือกว่าข้อนิ้วโคน
+    return tipToWrist < mcpToWrist * 1.15;
+  }
+
+  /* เพิ่มฟังก์ชันแยกท่ามือ */
+  String classifyGesture(List<double> features) {
+    if (features.length != 63) {
+      return 'UNKNOWN';
+    }
+
+    final indexExtended = isFingerExtended(features, tip: 8, pip: 6);
+    final middleExtended = isFingerExtended(features, tip: 12, pip: 10);
+    final ringExtended = isFingerExtended(features, tip: 16, pip: 14);
+    final pinkyExtended = isFingerExtended(features, tip: 20, pip: 18);
+
+    final indexFolded = isFingerFolded(features, tip: 8, pip: 6, mcp: 5);
+    final middleFolded = isFingerFolded(features, tip: 12, pip: 10, mcp: 9);
+    final ringFolded = isFingerFolded(features, tip: 16, pip: 14, mcp: 13);
+    final pinkyFolded = isFingerFolded(features, tip: 20, pip: 18, mcp: 17);
+
+    final foldedCount = [
+      indexFolded,
+      middleFolded,
+      ringFolded,
+      pinkyFolded,
+    ].where((value) => value).length;
+
+    final extendedCount = [
+      indexExtended,
+      middleExtended,
+      ringExtended,
+      pinkyExtended,
+    ].where((value) => value).length;
+
+    final thumbIndexDistance = distance2D(features, 4, 8);
+    final wristMiddleMcpDistance = distance2D(features, 0, 9);
+
+    final pinchThreshold = wristMiddleMcpDistance * 0.18;
+    final isPinch = thumbIndexDistance < pinchThreshold;
+
+    // สำคัญ: เช็ก FIST ก่อน PINCH
+    // เพื่อกันกำมือแล้วถูกจับเป็น PINCH
+    final palmSize = distance2D(features, 0, 9);
+    final avgTipToWrist =
+        (distance2D(features, 8, 0) +
+            distance2D(features, 12, 0) +
+            distance2D(features, 16, 0) +
+            distance2D(features, 20, 0)) /
+        4;
+
+    // FIST ต้องนิ้วงออย่างน้อย 4 นิ้ว
+    // และปลายนิ้วต้องอยู่ใกล้ข้อมือจริง ๆ
+    if (foldedCount >= 4 && avgTipToWrist < palmSize * 1.8) {
+      return 'FIST';
+    }
+
+    // PINCH = นิ้วโป้งใกล้นิ้วชี้ แต่ต้องไม่ใช่กำมือ
+    if (isPinch && foldedCount <= 1) {
+      return 'PINCH';
+    }
+
+    // ONE_FINGER = ชูนิ้วชี้นิ้วเดียว
+    if (indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
+      return 'ONE_FINGER';
+    }
+
+    // TWO_FINGER = ชูนิ้วชี้ + นิ้วกลาง
+    if (indexExtended && middleExtended && !ringExtended && !pinkyExtended) {
+      return 'TWO_FINGER';
+    }
+
+    // OPEN PALM = นิ้วหลักเหยียดหลายนิ้ว
+    if (extendedCount >= 4) {
+      final wristY = landmarkY(features, 0);
+
+      final avgFingerTipY =
+          (landmarkY(features, 8) +
+              landmarkY(features, 12) +
+              landmarkY(features, 16) +
+              landmarkY(features, 20)) /
+          4;
+
+      if (avgFingerTipY < wristY) {
+        return 'OPEN_PALM_UP';
+      } else {
+        return 'OPEN_PALM_DOWN';
+      }
+    }
+
+    return 'UNKNOWN';
+  }
+
+  /* เพิ่มฟังก์ชัน smoothing กัน gesture แกว่ง */
+  String smoothGesture(String gesture) {
+    gestureHistory.add(gesture);
+
+    final maxWindow = AppSettings.smoothingWindow;
+
+    if (gestureHistory.length > maxWindow) {
+      gestureHistory.removeAt(0);
+    }
+
+    final counts = <String, int>{};
+
+    for (final item in gestureHistory) {
+      counts[item] = (counts[item] ?? 0) + 1;
+    }
+
+    String bestGesture = 'UNKNOWN';
+    int bestCount = 0;
+
+    counts.forEach((key, value) {
+      if (value > bestCount) {
+        bestGesture = key;
+        bestCount = value;
+      }
+    });
+
+    if (gestureHistory.length >= 5 && bestCount >= 4) {
+      return bestGesture;
+    }
+
+    return latestGesture;
+  }
+
+  /* เพิ่มฟังก์ชันส่ง command ตาม Mapping */
+  void handleGestureCommand(String gesture, List<double> features) {
+    if (gesture == 'UNKNOWN') return;
+
+    final command = AppSettings.commandForGesture(gesture);
+
+    if (command == 'NONE') return;
+
+    final now = DateTime.now();
+
+    // ONE_FINGER ใช้สำหรับ CURSOR_MOVE และต้องส่ง x,y ของ landmark 8
+    if (gesture == 'ONE_FINGER' && command == 'CURSOR_MOVE') {
+      if (lastCursorMoveSentAt != null &&
+          now.difference(lastCursorMoveSentAt!).inMilliseconds <
+              AppSettings.cursorThrottleMs) {
+        return;
+      }
+
+      lastCursorMoveSentAt = now;
+
+      final x = landmarkX(features, 8);
+      final y = landmarkY(features, 8);
+
+      webSocketService.sendCommand(
+        command: command,
+        gesture: gesture,
+        x: x,
+        y: y,
+      );
+
+      return;
+    }
+
+    // gesture อื่นใช้ debounce กันส่งรัว
+    if (lastCommandSentAt != null &&
+        lastSentGesture == gesture &&
+        now.difference(lastCommandSentAt!).inMilliseconds <
+            AppSettings.debounceTimeMs) {
+      return;
+    }
+
+    lastCommandSentAt = now;
+    lastSentGesture = gesture;
+
+    webSocketService.sendCommand(command: command, gesture: gesture);
   }
 
   int get totalSampleCount => trainingService.totalSampleCount;
@@ -378,10 +619,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
     lastGestureCommandSentAt[gesture] = now;
 
-    webSocketService.sendCommand(
-      command: command,
-      gesture: gesture,
-    );
+    webSocketService.sendCommand(command: command, gesture: gesture);
   }
 
   void handleDetectedGesture(String gesture) {
@@ -410,20 +648,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
         );
         break;
 
-      case 'OPEN_PALM_RIGHT':
-        sendMappedGestureCommand(
-          command: mapping.openPalmRightCommand,
-          gesture: gesture,
-        );
-        break;
-
-      case 'OPEN_PALM_LEFT':
-        sendMappedGestureCommand(
-          command: mapping.openPalmLeftCommand,
-          gesture: gesture,
-        );
-        break;
-
       case 'TWO_FINGER':
         sendMappedGestureCommand(
           command: mapping.twoFingerCommand,
@@ -438,9 +662,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
         );
         break;
 
-      case 'PINCH':
+      case 'THUMB':
         sendMappedGestureCommand(
-          command: mapping.pinchCommand,
+          command: mapping.thumbCommand,
           gesture: gesture,
         );
         break;
@@ -749,8 +973,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
             Text(
               isDetecting
-                ? 'Detected Hands: $detectedHandCount | Gesture: $latestGesture | Landmark Features: ${latestLandmarkFeatures.length}'
-                : 'Detection is stopped',
+                  ? 'Detected Hands: $detectedHandCount | Features: ${latestLandmarkFeatures.length} | Gesture: $latestGesture'
+                  : 'Detection is stopped',
+              textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
 
@@ -802,10 +1027,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
                   ? 'Auto gesture control is active. Hand gestures can send commands automatically.'
                   : 'Press Start Detection to enable auto gesture control.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.black54,
-              ),
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
 
             const SizedBox(height: 12),
@@ -854,16 +1076,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
                       gesture: 'OPEN_PALM_DOWN',
                     ),
                     commandButton(
-                      label: 'Open Palm Right',
-                      command: mapping.openPalmRightCommand,
-                      gesture: 'OPEN_PALM_RIGHT',
-                    ),
-                    commandButton(
-                      label: 'Open Palm Left',
-                      command: mapping.openPalmLeftCommand,
-                      gesture: 'OPEN_PALM_LEFT',
-                    ),
-                    commandButton(
                       label: 'Two Finger',
                       command: mapping.twoFingerCommand,
                       gesture: 'TWO_FINGER',
@@ -874,9 +1086,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
                       gesture: 'FIST',
                     ),
                     commandButton(
-                      label: 'Pinch',
-                      command: mapping.pinchCommand,
-                      gesture: 'PINCH',
+                      label: 'Thumb',
+                      command: mapping.thumbCommand,
+                      gesture: 'THUMB',
                     ),
                     commandButton(
                       label: 'Close Browser',

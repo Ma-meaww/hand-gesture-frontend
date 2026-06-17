@@ -14,25 +14,29 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController ipController;
   late final TextEditingController portController;
 
+  String oneFingerCommand = 'CURSOR_MOVE';
+  String thumbCommand = 'CLICK';
   String openPalmUpCommand = 'SCROLL_UP';
   String openPalmDownCommand = 'SCROLL_DOWN';
-  String openPalmRightCommand = 'NONE';
-  String openPalmLeftCommand = 'NONE';
-  String twoFingerCommand = 'NONE';
   String fistCommand = 'OPEN_THAIJO';
-  String pinchCommand = 'CLICK';
+  String twoFingerCommand = 'THAIJO_SUBMIT_SEARCH';
 
   double smoothingWindow = 5;
   double debounceTime = 300;
 
   final List<DropdownMenuItem<String>> commandItems = const [
-    DropdownMenuItem(value: 'SCROLL_UP', child: Text('Scroll Up')),
-    DropdownMenuItem(value: 'SCROLL_DOWN', child: Text('Scroll Down')),
+    DropdownMenuItem(value: 'NONE', child: Text('None')),
+    DropdownMenuItem(value: 'CURSOR_MOVE', child: Text('Cursor Move')),
     DropdownMenuItem(value: 'CLICK', child: Text('Click')),
     DropdownMenuItem(value: 'CONFIRM', child: Text('Confirm / Enter')),
+    DropdownMenuItem(value: 'SCROLL_UP', child: Text('Scroll Up')),
+    DropdownMenuItem(value: 'SCROLL_DOWN', child: Text('Scroll Down')),
     DropdownMenuItem(value: 'OPEN_THAIJO', child: Text('Open ThaiJO')),
-    DropdownMenuItem(value: 'THAIJO_SUBMIT_SEARCH', child: Text('Submit ThaiJO Search')),
-    DropdownMenuItem(value: 'NONE', child: Text('None')),
+    DropdownMenuItem(
+      value: 'THAIJO_SUBMIT_SEARCH',
+      child: Text('Submit ThaiJO Search'),
+    ),
+    DropdownMenuItem(value: 'CLOSE_BROWSER', child: Text('Close Browser')),
   ];
 
   @override
@@ -41,6 +45,18 @@ class _SettingsPageState extends State<SettingsPage> {
 
     ipController = TextEditingController(text: webSocketService.lastIp);
     portController = TextEditingController(text: webSocketService.lastPort);
+
+    final mapping = gestureSettingsService.mapping.value;
+
+    oneFingerCommand = mapping.oneFingerCommand;
+    thumbCommand = mapping.thumbCommand;
+    openPalmUpCommand = mapping.openPalmUpCommand;
+    openPalmDownCommand = mapping.openPalmDownCommand;
+    fistCommand = mapping.fistCommand;
+    twoFingerCommand = mapping.twoFingerCommand;
+
+    smoothingWindow = mapping.smoothingWindow;
+    debounceTime = mapping.debounceTime;
   }
 
   @override
@@ -62,31 +78,32 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void resetDefaultSettings() {
-    setState(() {
-      openPalmUpCommand = 'SCROLL_UP';
-      openPalmDownCommand = 'SCROLL_DOWN';
-      openPalmRightCommand = 'NONE';
-      openPalmLeftCommand = 'NONE';
-      twoFingerCommand = 'NONE';
-      fistCommand = 'OPEN_THAIJO';
-      pinchCommand = 'CLICK';
-
-      smoothingWindow = 5;
-      debounceTime = 300;
-    });
     gestureSettingsService.reset();
+
+    final mapping = gestureSettingsService.mapping.value;
+
+    setState(() {
+      oneFingerCommand = mapping.oneFingerCommand;
+      thumbCommand = mapping.thumbCommand;
+      openPalmUpCommand = mapping.openPalmUpCommand;
+      openPalmDownCommand = mapping.openPalmDownCommand;
+      fistCommand = mapping.fistCommand;
+      twoFingerCommand = mapping.twoFingerCommand;
+
+      smoothingWindow = mapping.smoothingWindow;
+      debounceTime = mapping.debounceTime;
+    });
   }
 
   void updateSharedGestureSettings() {
     gestureSettingsService.update(
       GestureMapping(
+        oneFingerCommand: oneFingerCommand,
+        thumbCommand: thumbCommand,
         openPalmUpCommand: openPalmUpCommand,
         openPalmDownCommand: openPalmDownCommand,
-        openPalmRightCommand: openPalmRightCommand,
-        openPalmLeftCommand: openPalmLeftCommand,
-        twoFingerCommand: twoFingerCommand,
         fistCommand: fistCommand,
-        pinchCommand: pinchCommand,
+        twoFingerCommand: twoFingerCommand,
         smoothingWindow: smoothingWindow,
         debounceTime: debounceTime,
       ),
@@ -103,18 +120,12 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Text(
-            icon,
-            style: const TextStyle(fontSize: 26),
-          ),
+          Text(icon, style: const TextStyle(fontSize: 26)),
 
           const SizedBox(width: 12),
 
           Expanded(
-            child: Text(
-              gestureName,
-              style: const TextStyle(fontSize: 15),
-            ),
+            child: Text(gestureName, style: const TextStyle(fontSize: 15)),
           ),
 
           const Icon(Icons.arrow_forward, size: 18),
@@ -138,27 +149,18 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Settings'), centerTitle: true),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const Icon(
-              Icons.settings,
-              size: 80,
-            ),
+            const Icon(Icons.settings, size: 80),
 
             const SizedBox(height: 24),
 
             const Text(
               'หน้าตั้งค่าการเชื่อมต่อ',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 12),
@@ -255,10 +257,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ValueListenableBuilder<String>(
               valueListenable: webSocketService.statusText,
               builder: (context, status, child) {
-                return Text(
-                  status,
-                  textAlign: TextAlign.center,
-                );
+                return Text(status, textAlign: TextAlign.center);
               },
             ),
 
@@ -267,10 +266,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ValueListenableBuilder<String>(
               valueListenable: webSocketService.lastAck,
               builder: (context, ack, child) {
-                return Text(
-                  'Last ACK: $ack',
-                  textAlign: TextAlign.center,
-                );
+                return Text('Last ACK: $ack', textAlign: TextAlign.center);
               },
             ),
 
@@ -288,10 +284,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   const Text(
                     'GESTURE MAPPING',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
 
                   const SizedBox(height: 16),
@@ -304,8 +297,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (value == null) return;
                       setState(() {
                         openPalmUpCommand = value;
-                        updateSharedGestureSettings();
                       });
+
+                      updateSharedGestureSettings();
                     },
                   ),
 
@@ -317,34 +311,23 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (value == null) return;
                       setState(() {
                         openPalmDownCommand = value;
-                        updateSharedGestureSettings();
                       });
+
+                      updateSharedGestureSettings();
                     },
                   ),
 
                   gestureMappingRow(
-                    icon: '👉',
-                    gestureName: 'Open Palm Right',
-                    value: openPalmRightCommand,
+                    icon: '☝️',
+                    gestureName: 'One Finger',
+                    value: oneFingerCommand,
                     onChanged: (value) {
                       if (value == null) return;
                       setState(() {
-                        openPalmRightCommand = value;
-                        updateSharedGestureSettings();
+                        oneFingerCommand = value;
                       });
-                    },
-                  ),
 
-                  gestureMappingRow(
-                    icon: '👈',
-                    gestureName: 'Open Palm Left',
-                    value: openPalmLeftCommand,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() {
-                        openPalmLeftCommand = value;
-                        updateSharedGestureSettings();
-                      });
+                      updateSharedGestureSettings();
                     },
                   ),
 
@@ -356,8 +339,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (value == null) return;
                       setState(() {
                         twoFingerCommand = value;
-                        updateSharedGestureSettings();
                       });
+
+                      updateSharedGestureSettings();
                     },
                   ),
 
@@ -369,21 +353,23 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (value == null) return;
                       setState(() {
                         fistCommand = value;
-                        updateSharedGestureSettings();
                       });
+
+                      updateSharedGestureSettings();
                     },
                   ),
 
                   gestureMappingRow(
                     icon: '👌',
-                    gestureName: 'Pinch / OK Sign',
-                    value: pinchCommand,
+                    gestureName: 'Thumb  / OK Sign',
+                    value: thumbCommand,
                     onChanged: (value) {
                       if (value == null) return;
                       setState(() {
-                        pinchCommand = value;
-                        updateSharedGestureSettings();
+                        thumbCommand = value;
                       });
+
+                      updateSharedGestureSettings();
                     },
                   ),
 
@@ -415,10 +401,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   const Text(
                     'SENSITIVITY & PROCESSING',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
 
                   const SizedBox(height: 16),
@@ -440,8 +423,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     onChanged: (value) {
                       setState(() {
                         smoothingWindow = value;
-                        updateSharedGestureSettings();
                       });
+
+                      updateSharedGestureSettings();
                     },
                   ),
 
@@ -464,8 +448,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     onChanged: (value) {
                       setState(() {
                         debounceTime = value;
-                        updateSharedGestureSettings();
                       });
+                      updateSharedGestureSettings();
                     },
                   ),
                 ],

@@ -1,99 +1,335 @@
 import 'dart:math';
 
+import 'package:flutter/services.dart' show rootBundle;
+
 class GestureClassifierService {
-  String classify(List<double> features) {
-    if (features.length != 63) {
-      return 'UNKNOWN';
-    }
+  static const String unknownGesture = 'UNKNOWN';
 
-    final thumbTip = _point(features, 4);
-    final indexTip = _point(features, 8);
-    final indexPip = _point(features, 6);
-    final middleTip = _point(features, 12);
-    final middlePip = _point(features, 10);
-    final ringTip = _point(features, 16);
-    final ringPip = _point(features, 14);
-    final pinkyTip = _point(features, 20);
-    final pinkyPip = _point(features, 18);
-    final wrist = _point(features, 0);
-    final middleMcp = _point(features, 9);
+  static const String oneFinger = 'ONE_FINGER';
+  static const String thumb = 'THUMB';
+  static const String openPalmUp = 'OPEN_PALM_UP';
+  static const String openPalmDown = 'OPEN_PALM_DOWN';
+  static const String fist = 'FIST';
+  static const String twoFinger = 'TWO_FINGER';
 
-    final thumbIndexDistance = _distance(thumbTip, indexTip);
+  static const int _featureCount = 63;
+  static const int _k = 5;
 
-    final indexUp = indexTip.y < indexPip.y;
-    final middleUp = middleTip.y < middlePip.y;
-    final ringUp = ringTip.y < ringPip.y;
-    final pinkyUp = pinkyTip.y < pinkyPip.y;
+  bool _isLoaded = false;
 
-    final upCount = [
-      indexUp,
-      middleUp,
-      ringUp,
-      pinkyUp,
-    ].where((isUp) => isUp).length;
+  bool get isLoaded => _isLoaded;
+  int get sampleCount => _samples.length;
+  Set<String> get loadedLabels =>
+      _samples.map((sample) => sample.label).toSet();
 
-    if (thumbIndexDistance < 0.06) {
-      return 'PINCH';
-    }
+  final List<_GestureSample> _samples = [];
+  late List<double> _means;
+  late List<double> _stds;
 
-    if (upCount == 0) {
-      return 'FIST';
-    }
+  /// ปรับได้หลังเทสจริง
+  /// ถ้า UNKNOWN บ่อยเกินไป ให้เพิ่ม เช่น 8.5 หรือ 9.0
+  /// ถ้า gesture มั่วเกินไป ให้ลด เช่น 6.0 หรือ 6.5
+  final double _unknownDistanceThreshold = 999.0;
 
-    if (indexUp && middleUp && !ringUp && !pinkyUp) {
-      return 'TWO_FINGER';
-    }
+  Future<void> loadDataset() async {
+    if (_isLoaded) return;
 
-    if (upCount >= 3) {
-      return _classifyOpenPalmDirection(wrist, middleMcp);
-    }
+    final datasetAssets = [
+       'assets/datasets/custom_gesture_dataset.csv',
+    ];
 
-    if (indexUp && !middleUp && !ringUp && !pinkyUp) {
-      return 'ONE_FINGER';
-    }
+    Future<List<_RawGestureRow>> _loadRowsFromProjectCsv(
+      String assetPath,
+    ) async {
+      final csvText = await rootBundle.loadString(assetPath);
 
-    return 'UNKNOWN';
-  }
+      final lines = csvText
+          .split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList();
 
-  String _classifyOpenPalmDirection(_Point wrist, _Point middleMcp) {
-    final dx = middleMcp.x - wrist.x;
-    final dy = middleMcp.y - wrist.y;
-
-    if (dy.abs() > dx.abs()) {
-      if (dy < 0) {
-        return 'OPEN_PALM_UP';
+      if (lines.length <= 1) {
+        throw Exception('Dataset CSV is empty or invalid: $assetPath');
       }
 
-      return 'OPEN_PALM_DOWN';
+      final header = _splitCsvLine(lines.first);
+      final labelIndex = header.indexOf('label');
+
+      if (labelIndex == -1) {
+        throw Exception('CSV must contain a label column: $assetPath');
+      }
+
+      final rows = <_RawGestureRow>[];
+
+      for (int i = 1; i < lines.length; i++) {
+        final cols = _splitCsvLine(lines[i]);
+
+        if (cols.length != header.length) {
+          continue;
+        }
+
+        final label = cols[labelIndex].trim();
+
+        if (!_isAllowedGesture(label)) {
+          continue;
+        }
+
+        final features = <double>[];
+
+        for (int colIndex = 0; colIndex < cols.length; colIndex++) {
+          if (colIndex == labelIndex) continue;
+
+          final value = double.tryParse(cols[colIndex].trim());
+
+          if (value == null) {
+            features.clear();
+            break;
+          }
+
+          features.add(value);
+        }
+
+        if (features.length != _featureCount) {
+          continue;
+        }
+
+        rows.add(_RawGestureRow(label: label, features: features));
+      }
+
+      return rows;
     }
 
-    if (dx > 0) {
-      return 'OPEN_PALM_RIGHT';
+    final rawRows = <_RawGestureRow>[];
+
+    for (final assetPath in datasetAssets) {
+      final rows = await _loadRowsFromProjectCsv(assetPath);
+      rawRows.addAll(rows);
+
+      print('Loaded ${rows.length} rows from $assetPath');
     }
 
-    return 'OPEN_PALM_LEFT';
+    if (rawRows.isEmpty) {
+      throw Exception('No valid rows found in dataset.');
+    }
+
+    _means = _calculateMeans(rawRows);
+    _stds = _calculateStds(rawRows, _means);
+
+    _samples.clear();
+
+    for (final row in rawRows) {
+      _samples.add(
+        _GestureSample(label: row.label, features: _standardize(row.features)),
+      );
+    }
+
+    _isLoaded = true;
+
+    print('Dataset loaded rows: ${_samples.length}');
+    print('Dataset labels: ${loadedLabels}');
   }
 
-  _Point _point(List<double> features, int landmarkIndex) {
-    final baseIndex = landmarkIndex * 3;
+  /// เรียก method นี้จาก Gesture Control ตอนมี landmark 63 ค่า
+  ///
+  /// landmarks ต้องเรียงแบบ:
+  /// x0,y0,z0,x1,y1,z1,...,x20,y20,z20
+  String classify(List<double> landmarks) {
+    if (!_isLoaded) {
+      return unknownGesture;
+    }
 
-    return _Point(
-      features[baseIndex],
-      features[baseIndex + 1],
+    if (landmarks.length != _featureCount) {
+      return unknownGesture;
+    }
+
+    final normalizedInput = _normalizeLandmarks(landmarks);
+
+    if (normalizedInput == null) {
+      return unknownGesture;
+    }
+
+    final scaledInput = _standardize(normalizedInput);
+
+    final neighbors = _samples.map((sample) {
+      return _Neighbor(
+        label: sample.label,
+        distance: _euclideanDistance(scaledInput, sample.features),
+      );
+    }).toList()..sort((a, b) => a.distance.compareTo(b.distance));
+
+    final topK = neighbors.take(_k).toList();
+
+    if (topK.isEmpty) {
+      return unknownGesture;
+    }
+
+    final averageDistance =
+        topK.map((n) => n.distance).reduce((a, b) => a + b) / topK.length;
+
+    if (averageDistance > _unknownDistanceThreshold) {
+      return unknownGesture;
+    }
+
+    final voteCount = <String, int>{};
+    final distanceSumByLabel = <String, double>{};
+
+    for (final neighbor in topK) {
+      voteCount[neighbor.label] = (voteCount[neighbor.label] ?? 0) + 1;
+      distanceSumByLabel[neighbor.label] =
+          (distanceSumByLabel[neighbor.label] ?? 0) + neighbor.distance;
+    }
+
+    final sortedVotes = voteCount.entries.toList()
+      ..sort((a, b) {
+        final voteCompare = b.value.compareTo(a.value);
+
+        if (voteCompare != 0) {
+          return voteCompare;
+        }
+
+        final avgA = distanceSumByLabel[a.key]! / a.value;
+        final avgB = distanceSumByLabel[b.key]! / b.value;
+
+        return avgA.compareTo(avgB);
+      });
+
+    return sortedVotes.first.key;
+  }
+
+  bool _isAllowedGesture(String label) {
+    return label == oneFinger ||
+        label == thumb ||
+        label == fist ||
+        label == openPalmUp ||
+        label == openPalmDown ||
+        label == twoFinger;
+  }
+
+  /// ทำ live landmark ให้ใกล้กับ dataset:
+  /// wrist เป็นจุดเริ่มต้น และ scale ด้วยขนาดฝ่ามือ
+  List<double>? _normalizeLandmarks(List<double> landmarks) {
+    final wristX = _x(landmarks, 0);
+    final wristY = _y(landmarks, 0);
+    final wristZ = _z(landmarks, 0);
+
+    final middleMcpX = _x(landmarks, 9);
+    final middleMcpY = _y(landmarks, 9);
+    final middleMcpZ = _z(landmarks, 9);
+
+    final handSize = sqrt(
+      pow(middleMcpX - wristX, 2) +
+          pow(middleMcpY - wristY, 2) +
+          pow(middleMcpZ - wristZ, 2),
     );
+
+    if (handSize == 0) {
+      return null;
+    }
+
+    final normalized = <double>[];
+
+    for (int i = 0; i < 21; i++) {
+      normalized.add((_x(landmarks, i) - wristX) / handSize);
+      normalized.add((_y(landmarks, i) - wristY) / handSize);
+      normalized.add((_z(landmarks, i) - wristZ) / handSize);
+    }
+
+    return normalized;
   }
 
-  double _distance(_Point a, _Point b) {
-    final dx = a.x - b.x;
-    final dy = a.y - b.y;
+  List<String> _splitCsvLine(String line) {
+    return line.split(',');
+  }
 
-    return sqrt(dx * dx + dy * dy);
+  List<double> _calculateMeans(List<_RawGestureRow> rows) {
+    final means = List<double>.filled(_featureCount, 0);
+
+    for (final row in rows) {
+      for (int i = 0; i < _featureCount; i++) {
+        means[i] += row.features[i];
+      }
+    }
+
+    for (int i = 0; i < _featureCount; i++) {
+      means[i] /= rows.length;
+    }
+
+    return means;
+  }
+
+  List<double> _calculateStds(List<_RawGestureRow> rows, List<double> means) {
+    final stds = List<double>.filled(_featureCount, 0);
+
+    for (final row in rows) {
+      for (int i = 0; i < _featureCount; i++) {
+        final diff = row.features[i] - means[i];
+        stds[i] += diff * diff;
+      }
+    }
+
+    for (int i = 0; i < _featureCount; i++) {
+      stds[i] = sqrt(stds[i] / rows.length);
+
+      if (stds[i] == 0) {
+        stds[i] = 1;
+      }
+    }
+
+    return stds;
+  }
+
+  List<double> _standardize(List<double> features) {
+    final result = List<double>.filled(_featureCount, 0);
+
+    for (int i = 0; i < _featureCount; i++) {
+      result[i] = (features[i] - _means[i]) / _stds[i];
+    }
+
+    return result;
+  }
+
+  double _euclideanDistance(List<double> a, List<double> b) {
+    double sum = 0;
+
+    for (int i = 0; i < _featureCount; i++) {
+      final diff = a[i] - b[i];
+      sum += diff * diff;
+    }
+
+    return sqrt(sum);
+  }
+
+  double _x(List<double> landmarks, int index) {
+    return landmarks[index * 3];
+  }
+
+  double _y(List<double> landmarks, int index) {
+    return landmarks[index * 3 + 1];
+  }
+
+  double _z(List<double> landmarks, int index) {
+    return landmarks[index * 3 + 2];
   }
 }
 
-class _Point {
-  final double x;
-  final double y;
+class _RawGestureRow {
+  final String label;
+  final List<double> features;
 
-  const _Point(this.x, this.y);
+  const _RawGestureRow({required this.label, required this.features});
+}
+
+class _GestureSample {
+  final String label;
+  final List<double> features;
+
+  const _GestureSample({required this.label, required this.features});
+}
+
+class _Neighbor {
+  final String label;
+  final double distance;
+
+  const _Neighbor({required this.label, required this.distance});
 }
