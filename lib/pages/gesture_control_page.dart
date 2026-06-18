@@ -39,6 +39,20 @@ class _GestureControlPageState extends State<GestureControlPage> {
   DateTime? lastCursorMoveSentAt;
   String lastSentGesture = 'UNKNOWN';
 
+  double? smoothedCursorX;
+  double? smoothedCursorY;
+  bool cursorWasActive = false;
+
+  int cursorLostFrameCount = 0;
+  static const int cursorMaxLostFrames = 12;
+
+  static const bool cursorMirrorX = true;
+  static const bool cursorMirrorY = false;
+  static const bool cursorSwapXY = true;
+
+  static const double cursorSmoothingFactor = 0.35;
+  static const double cursorEdgeMargin = 0.12;
+
   // Training Mode
   bool isTrainingMode = false;
   bool isRecording = false;
@@ -104,7 +118,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
       try {
         handLandmarkerPlugin = HandLandmarkerPlugin.create(
           numHands: 1,
-          minHandDetectionConfidence: 0.7,
+          minHandDetectionConfidence: 0.5,
           delegate: HandLandmarkerDelegate.cpu,
         );
 
@@ -155,6 +169,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
   }
 
   Future<void> startHandDetection() async {
+    gestureHistory.clear();
+    latestGesture = 'UNKNOWN';
     if (cameraController == null || !cameraController!.value.isInitialized) {
       webSocketService.statusText.value = 'Camera not ready';
       return;
@@ -247,6 +263,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
         cameraController!.description.sensorOrientation,
       );
 
+      debugPrint('HAND DEBUG: hands=${hands.length}');
+
       final features = <double>[];
 
       if (hands.isNotEmpty) {
@@ -260,7 +278,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
       }
 
       final processedFeatures = smoothLandmarkFeatures(features);
-      final detectedGesture = gestureClassifier.classify(processedFeatures);
+      final predictedGesture = gestureClassifier.classify(processedFeatures);
+      final detectedGesture = applyGestureRuleGuard(
+        predictedGesture,
+        processedFeatures,
+      );
 
       debugFrameCount++;
       if (debugFrameCount % 30 == 0) {
@@ -307,7 +329,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
     required int tip,
     required int pip,
   }) {
-    return landmarkY(features, tip) < landmarkY(features, pip) - 0.025;
+    return landmarkY(features, tip) < landmarkY(features, pip) - 0.015;
   }
 
   bool isFingerFolded(
@@ -411,7 +433,64 @@ class _GestureControlPageState extends State<GestureControlPage> {
     return 'UNKNOWN';
   }
 
-  /* เพิ่มฟังก์ชัน smoothing กัน gesture แกว่ง */
+  String applyGestureRuleGuard(String predictedGesture, List<double> features) {
+    if (features.length != 63) {
+      return 'UNKNOWN';
+    }
+
+    final indexExtended = isFingerExtended(features, tip: 8, pip: 6);
+    final middleExtended = isFingerExtended(features, tip: 12, pip: 10);
+    final ringExtended = isFingerExtended(features, tip: 16, pip: 14);
+    final pinkyExtended = isFingerExtended(features, tip: 20, pip: 18);
+
+    final indexFolded = isFingerFolded(features, tip: 8, pip: 6, mcp: 5);
+    final middleFolded = isFingerFolded(features, tip: 12, pip: 10, mcp: 9);
+    final ringFolded = isFingerFolded(features, tip: 16, pip: 14, mcp: 13);
+    final pinkyFolded = isFingerFolded(features, tip: 20, pip: 18, mcp: 17);
+
+    final foldedCount = [
+      indexFolded,
+      middleFolded,
+      ringFolded,
+      pinkyFolded,
+    ].where((value) => value).length;
+
+    final isOneFingerByRule =
+        indexExtended &&
+        !middleExtended &&
+        !ringExtended &&
+        !pinkyExtended;
+
+    if (isOneFingerByRule) {
+      return 'ONE_FINGER';
+    }
+
+    final isTwoFingerByRule =
+        indexExtended &&
+        middleExtended &&
+        !ringExtended &&
+        !pinkyExtended;
+
+    if (isTwoFingerByRule) {
+      return 'TWO_FINGER';
+    }
+
+    if (predictedGesture == 'FIST') {
+      final isActuallyFist =
+          foldedCount >= 3 &&
+          !indexExtended &&
+          !middleExtended &&
+          !ringExtended &&
+          !pinkyExtended;
+
+      if (!isActuallyFist) {
+        return 'UNKNOWN';
+      }
+    }
+
+    return predictedGesture;
+  }
+
   String smoothGesture(String gesture) {
     gestureHistory.add(gesture);
 
@@ -447,13 +526,99 @@ class _GestureControlPageState extends State<GestureControlPage> {
     return latestGesture;
   }
 
-  /* เพิ่มฟังก์ชันส่ง command ตาม Mapping */
+  double clamp01(double value) {
+    if (value < 0) return 0;
+    if (value > 1) return 1;
+    return value;
+  }
+
+  double expandCursorRange(double value) {
+    final expanded = (value - cursorEdgeMargin) / (1 - cursorEdgeMargin * 2);
+    return clamp01(expanded);
+  }
+
+  bool isOneFingerCursorPose(List<double> features) {
+    if (features.length != 63) {
+      return false;
+    }
+
+    final indexExtended = isFingerExtended(features, tip: 8, pip: 6);
+    final middleExtended = isFingerExtended(features, tip: 12, pip: 10);
+    final ringExtended = isFingerExtended(features, tip: 16, pip: 14);
+    final pinkyExtended = isFingerExtended(features, tip: 20, pip: 18);
+
+    return indexExtended &&
+        !middleExtended &&
+        !ringExtended &&
+        !pinkyExtended;
+  }
+
+  Offset? buildCursorPosition(List<double> features) {
+    if (features.length != 63) {
+      return null;
+    }
+
+    double x = landmarkX(features, 8);
+    double y = landmarkY(features, 8);
+
+    if (cursorSwapXY) {
+      final temp = x;
+      x = y;
+      y = temp;
+    }
+
+    if (cursorMirrorX) {
+      x = 1 - x;
+    }
+
+    if (cursorMirrorY) {
+      y = 1 - y;
+    }
+
+    x = expandCursorRange(x);
+    y = expandCursorRange(y);
+
+    if (smoothedCursorX == null || smoothedCursorY == null) {
+      smoothedCursorX = x;
+      smoothedCursorY = y;
+    } else {
+      smoothedCursorX =
+          smoothedCursorX! + (x - smoothedCursorX!) * cursorSmoothingFactor;
+      smoothedCursorY =
+          smoothedCursorY! + (y - smoothedCursorY!) * cursorSmoothingFactor;
+    }
+
+    return Offset(
+      clamp01(smoothedCursorX!),
+      clamp01(smoothedCursorY!),
+    );
+  }
+
+  void resetCursorControl() {
+    smoothedCursorX = null;
+    smoothedCursorY = null;
+    lastCursorMoveSentAt = null;
+    cursorLostFrameCount = 0;
+
+    if (cursorWasActive && webSocketService.isConnected.value) {
+      webSocketService.sendCommand(
+        command: 'CURSOR_RESET',
+        gesture: 'CURSOR_RESET',
+      );
+    }
+
+    cursorWasActive = false;
+  }
+
   void handleGestureCommand(String gesture, List<double> features) {
     if (isTrainingMode || isRecording) {
+      resetCursorControl();
       return;
     }
 
     if (gesture == 'UNKNOWN') {
+      lastSentGesture = 'UNKNOWN';
+      resetCursorControl();
       return;
     }
 
@@ -461,15 +626,49 @@ class _GestureControlPageState extends State<GestureControlPage> {
     final command = mapping.commandForGesture(gesture);
 
     if (command == 'NONE') {
+      resetCursorControl();
       webSocketService.statusText.value = 'No command mapped for $gesture';
       return;
     }
 
     final now = DateTime.now();
 
-    // ONE_FINGER ใช้สำหรับ CURSOR_MOVE และต้องส่ง x,y ของ landmark 8
-    if (gesture == 'ONE_FINGER' && command == 'CURSOR_MOVE') {
-      if (features.length != 63) {
+    // Cursor mode: ส่งเฉพาะตอน ONE_FINGER + CURSOR_MOVE
+    // Cursor mode: ไม่พึ่ง KNN ทุกเฟรม
+    final oneFingerCommand = mapping.commandForGesture('ONE_FINGER');
+    final isCursorPose = isOneFingerCursorPose(features);
+
+    final shouldTrackCursor =
+        oneFingerCommand == 'CURSOR_MOVE' &&
+        features.length == 63 &&
+        (gesture == 'ONE_FINGER' || isCursorPose || cursorWasActive);
+
+    if (shouldTrackCursor) {
+      if (gesture == 'ONE_FINGER' || isCursorPose) {
+        cursorLostFrameCount = 0;
+      } else {
+        cursorLostFrameCount++;
+      }
+
+      if (cursorWasActive) {
+        cursorLostFrameCount++;
+
+        if (cursorLostFrameCount <= cursorMaxLostFrames) {
+          return;
+        }
+
+        resetCursorControl();
+      }
+
+      final cursorPosition = buildCursorPosition(features);
+
+      if (cursorPosition == null) {
+        cursorLostFrameCount++;
+
+        if (cursorLostFrameCount > cursorMaxLostFrames) {
+          resetCursorControl();
+        }
+
         return;
       }
 
@@ -480,24 +679,37 @@ class _GestureControlPageState extends State<GestureControlPage> {
       }
 
       lastCursorMoveSentAt = now;
-
-      final x = landmarkX(features, 8);
-      final y = landmarkY(features, 8);
+      cursorWasActive = true;
 
       webSocketService.sendCommand(
-        command: command,
-        gesture: gesture,
-        x: x,
-        y: y,
+        command: 'CURSOR_MOVE',
+        gesture: 'ONE_FINGER',
+        x: cursorPosition.dx,
+        y: cursorPosition.dy,
       );
 
       return;
     }
 
-    // gesture อื่นใช้ debounce กันส่งรัว
+    // ถ้าเปลี่ยนจาก cursor ไป gesture อื่น ให้ reset cursor state
+    resetCursorControl();
+
+    final oneShotCommands = {
+      'OPEN_THAIJO',
+      'CLICK',
+      'CONFIRM',
+      'THAIJO_SUBMIT_SEARCH',
+      'CLOSE_BROWSER',
+    };
+
+    if (oneShotCommands.contains(command) && lastSentGesture == gesture) {
+      return;
+    }
+
     final debounceMs = mapping.debounceTime.round();
 
-    if (lastCommandSentAt != null &&
+    if (!oneShotCommands.contains(command) &&
+        lastCommandSentAt != null &&
         lastSentGesture == gesture &&
         now.difference(lastCommandSentAt!).inMilliseconds < debounceMs) {
       return;

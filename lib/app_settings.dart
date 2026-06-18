@@ -9,7 +9,7 @@ class AppSettings {
   };
 
   static int debounceTimeMs = 500;
-  static int cursorThrottleMs = 100;
+  static int cursorThrottleMs = 80;
   static int smoothingWindow = 5;
 
   static String commandForGesture(String gesture) {
