@@ -35,7 +35,7 @@ class GestureClassifierService {
     if (_isLoaded) return;
 
     final datasetAssets = [
-       'assets/datasets/custom_gesture_dataset.csv',
+       'assets/datasets/custom_gesture_dataset_update.csv',
     ];
 
     Future<List<_RawGestureRow>> _loadRowsFromProjectCsv(
