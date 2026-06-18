@@ -93,7 +93,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
       cameraController = CameraController(
         selectedCamera,
-        ResolutionPreset.medium,
+        ResolutionPreset.low,
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.yuv420,
       );
@@ -103,7 +103,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
       try {
         handLandmarkerPlugin = HandLandmarkerPlugin.create(
-          numHands: 2,
+          numHands: 1,
           minHandDetectionConfidence: 0.7,
           delegate: HandLandmarkerDelegate.cpu,
         );
@@ -279,7 +279,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
         latestGesture = stableGesture;
       });
 
-      handleDetectedGesture(stableGesture);
+      handleGestureCommand(stableGesture, processedFeatures);
     } catch (e) {
       debugPrint('Hand detection error: $e');
     } finally {
@@ -415,7 +415,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
   String smoothGesture(String gesture) {
     gestureHistory.add(gesture);
 
-    final maxWindow = AppSettings.smoothingWindow;
+    final configuredWindow =
+    gestureSettingsService.mapping.value.smoothingWindow.round();
+
+    final maxWindow = configuredWindow < 1 ? 1 : configuredWindow;
 
     if (gestureHistory.length > maxWindow) {
       gestureHistory.removeAt(0);
@@ -446,16 +449,30 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   /* เพิ่มฟังก์ชันส่ง command ตาม Mapping */
   void handleGestureCommand(String gesture, List<double> features) {
-    if (gesture == 'UNKNOWN') return;
+    if (isTrainingMode || isRecording) {
+      return;
+    }
 
-    final command = AppSettings.commandForGesture(gesture);
+    if (gesture == 'UNKNOWN') {
+      return;
+    }
 
-    if (command == 'NONE') return;
+    final mapping = gestureSettingsService.mapping.value;
+    final command = mapping.commandForGesture(gesture);
+
+    if (command == 'NONE') {
+      webSocketService.statusText.value = 'No command mapped for $gesture';
+      return;
+    }
 
     final now = DateTime.now();
 
     // ONE_FINGER ใช้สำหรับ CURSOR_MOVE และต้องส่ง x,y ของ landmark 8
     if (gesture == 'ONE_FINGER' && command == 'CURSOR_MOVE') {
+      if (features.length != 63) {
+        return;
+      }
+
       if (lastCursorMoveSentAt != null &&
           now.difference(lastCursorMoveSentAt!).inMilliseconds <
               AppSettings.cursorThrottleMs) {
@@ -478,17 +495,21 @@ class _GestureControlPageState extends State<GestureControlPage> {
     }
 
     // gesture อื่นใช้ debounce กันส่งรัว
+    final debounceMs = mapping.debounceTime.round();
+
     if (lastCommandSentAt != null &&
         lastSentGesture == gesture &&
-        now.difference(lastCommandSentAt!).inMilliseconds <
-            AppSettings.debounceTimeMs) {
+        now.difference(lastCommandSentAt!).inMilliseconds < debounceMs) {
       return;
     }
 
     lastCommandSentAt = now;
     lastSentGesture = gesture;
 
-    webSocketService.sendCommand(command: command, gesture: gesture);
+    webSocketService.sendCommand(
+      command: command,
+      gesture: gesture,
+    );
   }
 
   int get totalSampleCount => trainingService.totalSampleCount;
@@ -736,7 +757,21 @@ class _GestureControlPageState extends State<GestureControlPage> {
             cameraController!.value.isInitialized) {
           return ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: CameraPreview(cameraController!),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CameraPreview(cameraController!),
+
+                CustomPaint(
+                  painter: HandLandmarkPainter(
+                    landmarks: latestLandmarkFeatures,
+                    mirrorX: true,
+                    mirrorY: true,
+                    swapXY: true,
+                  ),
+                ),
+              ],
+            ),
           );
         }
 
@@ -1112,5 +1147,138 @@ class _GestureControlPageState extends State<GestureControlPage> {
         ),
       ),
     );
+  }
+}
+
+class HandLandmarkPainter extends CustomPainter {
+  final List<double> landmarks;
+  final bool mirrorX;
+  final bool mirrorY;
+  final bool swapXY;
+
+  HandLandmarkPainter({
+    required this.landmarks,
+    this.mirrorX = false,
+    this.mirrorY = false,
+    this.swapXY = false,
+  });
+
+  static const List<List<int>> fingerConnections = [
+    [0, 1, 2, 3, 4],      // Thumb
+    [0, 5, 6, 7, 8],      // Index
+    [0, 9, 10, 11, 12],   // Middle
+    [0, 13, 14, 15, 16],  // Ring
+    [0, 17, 18, 19, 20],  // Pinky
+    [5, 9, 13, 17, 5],    // Palm
+  ];
+
+  static const Map<int, String> fingertipLabels = {
+    4: 'โป้ง',
+    8: 'ชี้',
+    12: 'กลาง',
+    16: 'นาง',
+    20: 'ก้อย',
+  };
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (landmarks.length != 63) {
+      return;
+    }
+
+    final linePaint = Paint()
+      ..color = Colors.greenAccent
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+
+    final pointPaint = Paint()
+      ..color = Colors.orangeAccent
+      ..style = PaintingStyle.fill;
+
+    final fingertipPaint = Paint()
+      ..color = Colors.redAccent
+      ..style = PaintingStyle.fill;
+
+    Offset pointOf(int index) {
+      double x = landmarks[index * 3].clamp(0.0, 1.0).toDouble();
+      double y = landmarks[index * 3 + 1].clamp(0.0, 1.0).toDouble();
+
+      if (swapXY) {
+        final temp = x;
+        x = y;
+        y = temp;
+      }
+
+      if (mirrorX) {
+        x = 1 - x;
+      }
+
+      if (mirrorY) {
+        y = 1 - y;
+      }
+
+      return Offset(
+        x * size.width,
+        y * size.height,
+      );
+    }
+
+    // วาดเส้นเชื่อมข้อนิ้ว
+    for (final connection in fingerConnections) {
+      for (int i = 0; i < connection.length - 1; i++) {
+        final start = pointOf(connection[i]);
+        final end = pointOf(connection[i + 1]);
+
+        canvas.drawLine(start, end, linePaint);
+      }
+    }
+
+    // วาดจุด landmark ทั้ง 21 จุด
+    for (int i = 0; i < 21; i++) {
+      final point = pointOf(i);
+
+      final isFingertip = fingertipLabels.containsKey(i);
+
+      canvas.drawCircle(
+        point,
+        isFingertip ? 7 : 4,
+        isFingertip ? fingertipPaint : pointPaint,
+      );
+    }
+
+    // เขียนชื่อปลายนิ้ว
+    fingertipLabels.forEach((index, label) {
+      final point = pointOf(index);
+
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            backgroundColor: Colors.black54,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+
+      textPainter.layout();
+
+      final labelOffset = Offset(
+        point.dx + 8,
+        point.dy - 18,
+      );
+
+      textPainter.paint(canvas, labelOffset);
+    });
+  }
+
+  @override
+  bool shouldRepaint(covariant HandLandmarkPainter oldDelegate) {
+    return oldDelegate.landmarks != landmarks ||
+      oldDelegate.mirrorX != mirrorX ||
+      oldDelegate.mirrorY != mirrorY ||
+      oldDelegate.swapXY != swapXY;
   }
 }

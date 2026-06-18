@@ -1,7 +1,7 @@
 class AppSettings {
   static final Map<String, String> gestureCommandMap = {
     'ONE_FINGER': 'CURSOR_MOVE',
-    'PINCH': 'CLICK',
+    'THUMB': 'CLICK',
     'OPEN_PALM_UP': 'SCROLL_UP',
     'OPEN_PALM_DOWN': 'SCROLL_DOWN',
     'FIST': 'OPEN_THAIJO',
@@ -22,7 +22,7 @@ class AppSettings {
 
   static void resetDefaults() {
     gestureCommandMap['ONE_FINGER'] = 'CURSOR_MOVE';
-    gestureCommandMap['PINCH'] = 'CLICK';
+    gestureCommandMap['THUMB'] = 'CLICK';
     gestureCommandMap['OPEN_PALM_UP'] = 'SCROLL_UP';
     gestureCommandMap['OPEN_PALM_DOWN'] = 'SCROLL_DOWN';
     gestureCommandMap['FIST'] = 'OPEN_THAIJO';
