@@ -47,7 +47,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
   static const int cursorMaxLostFrames = 12;
 
   static const bool cursorMirrorX = true;
-  static const bool cursorMirrorY = false;
+  static const bool cursorMirrorY = true;
   static const bool cursorSwapXY = true;
 
   static const double cursorSmoothingFactor = 0.35;
