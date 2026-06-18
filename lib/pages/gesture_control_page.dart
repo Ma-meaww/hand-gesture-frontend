@@ -616,31 +616,19 @@ class _GestureControlPageState extends State<GestureControlPage> {
       return;
     }
 
-    if (gesture == 'UNKNOWN') {
-      lastSentGesture = 'UNKNOWN';
-      resetCursorControl();
-      return;
-    }
-
     final mapping = gestureSettingsService.mapping.value;
-    final command = mapping.commandForGesture(gesture);
-
-    if (command == 'NONE') {
-      resetCursorControl();
-      webSocketService.statusText.value = 'No command mapped for $gesture';
-      return;
-    }
-
     final now = DateTime.now();
 
-    // Cursor mode: ส่งเฉพาะตอน ONE_FINGER + CURSOR_MOVE
-    // Cursor mode: ไม่พึ่ง KNN ทุกเฟรม
+    // Cursor ต้องมาก่อนการเช็ก UNKNOWN / NONE
+    // เพราะตอนขยับมือ classifier อาจหลุดเป็น UNKNOWN/FIST ชั่วคราว
     final oneFingerCommand = mapping.commandForGesture('ONE_FINGER');
     final isCursorPose = isOneFingerCursorPose(features);
 
+    final canTrackCursor =
+        oneFingerCommand == 'CURSOR_MOVE' && features.length == 63;
+
     final shouldTrackCursor =
-        oneFingerCommand == 'CURSOR_MOVE' &&
-        features.length == 63 &&
+        canTrackCursor &&
         (gesture == 'ONE_FINGER' || isCursorPose || cursorWasActive);
 
     if (shouldTrackCursor) {
@@ -650,14 +638,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
         cursorLostFrameCount++;
       }
 
-      if (cursorWasActive) {
-        cursorLostFrameCount++;
-
-        if (cursorLostFrameCount <= cursorMaxLostFrames) {
-          return;
-        }
-
+      if (cursorLostFrameCount > cursorMaxLostFrames) {
         resetCursorControl();
+        return;
       }
 
       final cursorPosition = buildCursorPosition(features);
@@ -691,8 +674,17 @@ class _GestureControlPageState extends State<GestureControlPage> {
       return;
     }
 
-    // ถ้าเปลี่ยนจาก cursor ไป gesture อื่น ให้ reset cursor state
-    resetCursorControl();
+    if (gesture == 'UNKNOWN') {
+      lastSentGesture = 'UNKNOWN';
+      return;
+    }
+
+    final command = mapping.commandForGesture(gesture);
+
+    if (command == 'NONE') {
+      webSocketService.statusText.value = 'No command mapped for $gesture';
+      return;
+    }
 
     final oneShotCommands = {
       'OPEN_THAIJO',
