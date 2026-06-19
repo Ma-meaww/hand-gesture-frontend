@@ -467,16 +467,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
         return predictedGesture;
       }
 
-      final wristY = landmarkY(features, 0);
+      final middleMcpY = landmarkY(features, 9);
+      final middleTipY = landmarkY(features, 12);
 
-      final avgFingerTipY =
-          (landmarkY(features, 8) +
-              landmarkY(features, 12) +
-              landmarkY(features, 16) +
-              landmarkY(features, 20)) /
-          4;
-
-      return avgFingerTipY < wristY ? 'OPEN_PALM_UP' : 'OPEN_PALM_DOWN';
+      return middleTipY < middleMcpY ? 'OPEN_PALM_UP' : 'OPEN_PALM_DOWN';
     }
 
     return predictedGesture;
