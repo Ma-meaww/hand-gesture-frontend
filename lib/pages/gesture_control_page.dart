@@ -44,7 +44,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
   bool cursorWasActive = false;
 
   int cursorLostFrameCount = 0;
-  static const int cursorMaxLostFrames = 12;
+  static const int cursorMaxLostFrames = 4;
+
+  int oneFingerCandidateFrameCount = 0;
+  static const int oneFingerRequiredFrames = 2;
 
   static const bool cursorMirrorX = true;
   static const bool cursorMirrorY = true;
@@ -170,6 +173,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   Future<void> startHandDetection() async {
     gestureHistory.clear();
+    oneFingerCandidateFrameCount = 0;
     latestGesture = 'UNKNOWN';
     if (cameraController == null || !cameraController!.value.isInitialized) {
       webSocketService.statusText.value = 'Camera not ready';
@@ -279,10 +283,12 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
       final processedFeatures = smoothLandmarkFeatures(features);
       final predictedGesture = gestureClassifier.classify(processedFeatures);
-      final detectedGesture = applyGestureRuleGuard(
+      final guardedGesture = applyGestureRuleGuard(
         predictedGesture,
         processedFeatures,
       );
+
+      final detectedGesture = confirmOneFingerGesture(guardedGesture);
 
       debugFrameCount++;
       if (debugFrameCount % 30 == 0) {
@@ -457,6 +463,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
     final isOneFingerByRule =
         indexExtended &&
+        !indexFolded &&
+        middleFolded &&
+        ringFolded &&
+        pinkyFolded &&
         !middleExtended &&
         !ringExtended &&
         !pinkyExtended;
@@ -489,6 +499,21 @@ class _GestureControlPageState extends State<GestureControlPage> {
     }
 
     return predictedGesture;
+  }
+
+  String confirmOneFingerGesture(String gesture) {
+    if (gesture == 'ONE_FINGER') {
+      oneFingerCandidateFrameCount++;
+
+      if (oneFingerCandidateFrameCount < oneFingerRequiredFrames) {
+        return 'UNKNOWN';
+      }
+
+      return 'ONE_FINGER';
+    }
+
+    oneFingerCandidateFrameCount = 0;
+    return gesture;
   }
 
   String smoothGesture(String gesture) {
