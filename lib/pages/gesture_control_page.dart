@@ -462,6 +462,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
     }
 
     if (extendedFingerCount >= 3) {
+      if (predictedGesture == 'OPEN_PALM_UP' ||
+          predictedGesture == 'OPEN_PALM_DOWN') {
+        return predictedGesture;
+      }
+
       final wristY = landmarkY(features, 0);
 
       final avgFingerTipY =
