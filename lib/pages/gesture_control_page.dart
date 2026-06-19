@@ -178,6 +178,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
   Future<void> startHandDetection() async {
     gestureHistory.clear();
     oneFingerCandidateFrameCount = 0;
+    oneFingerMissFrameCount = 0;
     latestGesture = 'UNKNOWN';
     if (cameraController == null || !cameraController!.value.isInitialized) {
       webSocketService.statusText.value = 'Camera not ready';
@@ -219,6 +220,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
     landmarkFeatureHistory.clear();
     webSocketService.statusText.value = 'Hand detection stopped';
+    gestureHistory.clear();
+    oneFingerCandidateFrameCount = 0;
+    oneFingerMissFrameCount = 0;
+    resetCursorControl();
   }
 
   List<double> smoothLandmarkFeatures(List<double> features) {
@@ -269,9 +274,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
       final hands = handLandmarkerPlugin!.detect(
         image,
         cameraController!.description.sensorOrientation,
-      );
-
-      debugPrint('HAND DEBUG: hands=${hands.length}');
+      );      
 
       final features = <double>[];
 
@@ -405,95 +408,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
     // นิ้วงอจริง = ปลายนิ้วต้องอยู่ใกล้ข้อมือกว่าข้อนิ้วโคน
     return tipToWrist < mcpToWrist * 1.15;
-  }
-
-  // Legacy rule-based classifier.
-  // Not used in the current detection flow.
-  String classifyGesture(List<double> features) {
-    if (features.length != 63) {
-      return 'UNKNOWN';
-    }
-
-    final indexExtended = isFingerExtended(features, tip: 8, pip: 6);
-    final middleExtended = isFingerExtended(features, tip: 12, pip: 10);
-    final ringExtended = isFingerExtended(features, tip: 16, pip: 14);
-    final pinkyExtended = isFingerExtended(features, tip: 20, pip: 18);
-
-    final indexFolded = isFingerFolded(features, tip: 8, pip: 6, mcp: 5);
-    final middleFolded = isFingerFolded(features, tip: 12, pip: 10, mcp: 9);
-    final ringFolded = isFingerFolded(features, tip: 16, pip: 14, mcp: 13);
-    final pinkyFolded = isFingerFolded(features, tip: 20, pip: 18, mcp: 17);
-
-    final foldedCount = [
-      indexFolded,
-      middleFolded,
-      ringFolded,
-      pinkyFolded,
-    ].where((value) => value).length;
-
-    final extendedCount = [
-      indexExtended,
-      middleExtended,
-      ringExtended,
-      pinkyExtended,
-    ].where((value) => value).length;
-
-    final thumbIndexDistance = distance2D(features, 4, 8);
-    final wristMiddleMcpDistance = distance2D(features, 0, 9);
-
-    final pinchThreshold = wristMiddleMcpDistance * 0.18;
-    final isPinch = thumbIndexDistance < pinchThreshold;
-
-    // สำคัญ: เช็ก FIST ก่อน PINCH
-    // เพื่อกันกำมือแล้วถูกจับเป็น PINCH
-    final palmSize = distance2D(features, 0, 9);
-    final avgTipToWrist =
-        (distance2D(features, 8, 0) +
-            distance2D(features, 12, 0) +
-            distance2D(features, 16, 0) +
-            distance2D(features, 20, 0)) /
-        4;
-
-    // FIST ต้องนิ้วงออย่างน้อย 4 นิ้ว
-    // และปลายนิ้วต้องอยู่ใกล้ข้อมือจริง ๆ
-    if (foldedCount >= 4 && avgTipToWrist < palmSize * 1.8) {
-      return 'FIST';
-    }
-
-    // PINCH = นิ้วโป้งใกล้นิ้วชี้ แต่ต้องไม่ใช่กำมือ
-    if (isPinch && foldedCount <= 1) {
-      return 'PINCH';
-    }
-
-    // ONE_FINGER = ชูนิ้วชี้นิ้วเดียว
-    if (indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
-      return 'ONE_FINGER';
-    }
-
-    // TWO_FINGER = ชูนิ้วชี้ + นิ้วกลาง
-    if (indexExtended && middleExtended && !ringExtended && !pinkyExtended) {
-      return 'TWO_FINGER';
-    }
-
-    // OPEN PALM = นิ้วหลักเหยียดหลายนิ้ว
-    if (extendedCount >= 4) {
-      final wristY = landmarkY(features, 0);
-
-      final avgFingerTipY =
-          (landmarkY(features, 8) +
-              landmarkY(features, 12) +
-              landmarkY(features, 16) +
-              landmarkY(features, 20)) /
-          4;
-
-      if (avgFingerTipY < wristY) {
-        return 'OPEN_PALM_UP';
-      } else {
-        return 'OPEN_PALM_DOWN';
-      }
-    }
-
-    return 'UNKNOWN';
   }
 
   String applyGestureRuleGuard(String predictedGesture, List<double> features) {
@@ -737,7 +651,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
     // Cursor ต้องมาก่อนการเช็ก UNKNOWN / NONE
     // เพราะตอนขยับมือ classifier อาจหลุดเป็น UNKNOWN/FIST ชั่วคราว
     final oneFingerCommand = mapping.commandForGesture('ONE_FINGER');
-    final isCursorPose = isOneFingerCursorPose(features);
+    final normalizedCursorFeatures = normalizeFeatures(features);
+    final isCursorPose = isOneFingerCursorPose(normalizedCursorFeatures);
 
     final canTrackCursor =
         oneFingerCommand == 'CURSOR_MOVE' && features.length == 63;
@@ -960,55 +875,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
     lastGestureCommandSentAt[gesture] = now;
 
     webSocketService.sendCommand(command: command, gesture: gesture);
-  }
-
-  void handleDetectedGesture(String gesture) {
-    if (isTrainingMode || isRecording) {
-      return;
-    }
-
-    if (gesture == 'UNKNOWN') {
-      return;
-    }
-
-    final mapping = gestureSettingsService.mapping.value;
-
-    switch (gesture) {
-      case 'OPEN_PALM_UP':
-        sendMappedGestureCommand(
-          command: mapping.openPalmUpCommand,
-          gesture: gesture,
-        );
-        break;
-
-      case 'OPEN_PALM_DOWN':
-        sendMappedGestureCommand(
-          command: mapping.openPalmDownCommand,
-          gesture: gesture,
-        );
-        break;
-
-      case 'TWO_FINGER':
-        sendMappedGestureCommand(
-          command: mapping.twoFingerCommand,
-          gesture: gesture,
-        );
-        break;
-
-      case 'FIST':
-        sendMappedGestureCommand(
-          command: mapping.fistCommand,
-          gesture: gesture,
-        );
-        break;
-
-      case 'THUMB':
-        sendMappedGestureCommand(
-          command: mapping.thumbCommand,
-          gesture: gesture,
-        );
-        break;
-    }
   }
 
   void sendMacro() {
