@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -48,6 +49,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   int oneFingerCandidateFrameCount = 0;
   static const int oneFingerRequiredFrames = 2;
+
+  int oneFingerMissFrameCount = 0;
+  static const int oneFingerMaxMissFrames = 1;
 
   static const bool cursorMirrorX = true;
   static const bool cursorMirrorY = true;
@@ -282,10 +286,12 @@ class _GestureControlPageState extends State<GestureControlPage> {
       }
 
       final processedFeatures = smoothLandmarkFeatures(features);
-      final predictedGesture = gestureClassifier.classify(processedFeatures);
+      final normalizedFeatures = normalizeFeatures(processedFeatures);
+
+      final predictedGesture = gestureClassifier.classify(normalizedFeatures);
       final guardedGesture = applyGestureRuleGuard(
         predictedGesture,
-        processedFeatures,
+        normalizedFeatures,
       );
 
       final detectedGesture = confirmOneFingerGesture(guardedGesture);
@@ -330,12 +336,62 @@ class _GestureControlPageState extends State<GestureControlPage> {
     return (dx * dx + dy * dy);
   }
 
+  List<double> normalizeFeatures(List<double> features) {
+    if (features.length != 63) {
+      return features;
+    }
+
+    final wristX = landmarkX(features, 0);
+    final wristY = landmarkY(features, 0);
+    final wristZ = features[2];
+
+    // ขนาดมืออ้างอิงจากระยะ wrist -> middle_mcp (index 9)
+    final handSize = math.sqrt(distance2D(features, 0, 9));
+
+    if (handSize < 0.001) {
+      return features;
+    }
+
+    final normalized = List<double>.filled(features.length, 0);
+
+    for (int i = 0; i < 21; i++) {
+      normalized[i * 3] = (features[i * 3] - wristX) / handSize;
+      normalized[i * 3 + 1] = (features[i * 3 + 1] - wristY) / handSize;
+      normalized[i * 3 + 2] = (features[i * 3 + 2] - wristZ) / handSize;
+    }
+
+    return normalized;
+  }
+
   bool isFingerExtended(
     List<double> features, {
     required int tip,
     required int pip,
   }) {
-    return landmarkY(features, tip) < landmarkY(features, pip) - 0.015;
+    return landmarkY(features, tip) < landmarkY(features, pip) - 0.025;
+  }
+
+  bool isFingerLikelyExtended(
+    List<double> features, {
+    required int tip,
+    required int pip,
+  }) {
+    if (features.length != 63) {
+      return false;
+    }
+
+    return landmarkY(features, tip) < landmarkY(features, pip) - 0.02;
+  }
+
+  bool isThumbExtended(List<double> features) {
+    if (features.length != 63) {
+      return false;
+    }
+
+    final thumbTipToWrist = distance2D(features, 4, 0);
+    final thumbIpToWrist = distance2D(features, 3, 0);
+
+    return thumbTipToWrist > thumbIpToWrist * 1.15;
   }
 
   bool isFingerFolded(
@@ -351,7 +407,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
     return tipToWrist < mcpToWrist * 1.15;
   }
 
-  /* เพิ่มฟังก์ชันแยกท่ามือ */
+  // Legacy rule-based classifier.
+  // Not used in the current detection flow.
   String classifyGesture(List<double> features) {
     if (features.length != 63) {
       return 'UNKNOWN';
@@ -440,6 +497,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
   }
 
   String applyGestureRuleGuard(String predictedGesture, List<double> features) {
+
     if (features.length != 63) {
       return 'UNKNOWN';
     }
@@ -461,41 +519,45 @@ class _GestureControlPageState extends State<GestureControlPage> {
       pinkyFolded,
     ].where((value) => value).length;
 
-    final isOneFingerByRule =
-        indexExtended &&
-        !indexFolded &&
-        middleFolded &&
-        ringFolded &&
-        pinkyFolded &&
+    final thumbExtended = isThumbExtended(features);
+
+    // ★ เช็ก THUMB ก่อน เพราะไม่ได้นับอยู่ใน foldedCount/extendedFingerCount
+    final isThumbByRule =
+        thumbExtended &&
+        !indexExtended &&
         !middleExtended &&
         !ringExtended &&
         !pinkyExtended;
 
-    if (isOneFingerByRule) {
+    if (isThumbByRule) {
+      return 'THUMB';
+    }
+
+    final extendedFingerCount = 4 - foldedCount;
+
+    if (!thumbExtended && extendedFingerCount == 0) {
+      return 'FIST';
+    }
+
+    if (extendedFingerCount == 1) {
       return 'ONE_FINGER';
     }
 
-    final isTwoFingerByRule =
-        indexExtended &&
-        middleExtended &&
-        !ringExtended &&
-        !pinkyExtended;
-
-    if (isTwoFingerByRule) {
+    if (extendedFingerCount == 2) {
       return 'TWO_FINGER';
     }
 
-    if (predictedGesture == 'FIST') {
-      final isActuallyFist =
-          foldedCount >= 3 &&
-          !indexExtended &&
-          !middleExtended &&
-          !ringExtended &&
-          !pinkyExtended;
+    if (extendedFingerCount >= 3) {
+      final wristY = landmarkY(features, 0);
 
-      if (!isActuallyFist) {
-        return 'UNKNOWN';
-      }
+      final avgFingerTipY =
+          (landmarkY(features, 8) +
+              landmarkY(features, 12) +
+              landmarkY(features, 16) +
+              landmarkY(features, 20)) /
+          4;
+
+      return avgFingerTipY < wristY ? 'OPEN_PALM_UP' : 'OPEN_PALM_DOWN';
     }
 
     return predictedGesture;
@@ -504,6 +566,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
   String confirmOneFingerGesture(String gesture) {
     if (gesture == 'ONE_FINGER') {
       oneFingerCandidateFrameCount++;
+      oneFingerMissFrameCount = 0;
 
       if (oneFingerCandidateFrameCount < oneFingerRequiredFrames) {
         return 'UNKNOWN';
@@ -512,7 +575,17 @@ class _GestureControlPageState extends State<GestureControlPage> {
       return 'ONE_FINGER';
     }
 
+    if (gesture == 'UNKNOWN' && oneFingerCandidateFrameCount > 0) {
+      oneFingerMissFrameCount++;
+
+      if (oneFingerMissFrameCount <= oneFingerMaxMissFrames) {
+        return latestGesture == 'ONE_FINGER' ? 'ONE_FINGER' : 'UNKNOWN';
+      }
+    }
+
     oneFingerCandidateFrameCount = 0;
+    oneFingerMissFrameCount = 0;
+
     return gesture;
   }
 
@@ -520,7 +593,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
     gestureHistory.add(gesture);
 
     final configuredWindow =
-    gestureSettingsService.mapping.value.smoothingWindow.round();
+        gestureSettingsService.mapping.value.smoothingWindow.round();
 
     final maxWindow = configuredWindow < 1 ? 1 : configuredWindow;
 
@@ -544,7 +617,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
       }
     });
 
-    if (gestureHistory.length >= 5 && bestCount >= 4) {
+    final requiredCount = (maxWindow * 0.6).ceil();
+
+    if (gestureHistory.length >= maxWindow && bestCount >= requiredCount) {
       return bestGesture;
     }
 
@@ -567,15 +642,30 @@ class _GestureControlPageState extends State<GestureControlPage> {
       return false;
     }
 
-    final indexExtended = isFingerExtended(features, tip: 8, pip: 6);
-    final middleExtended = isFingerExtended(features, tip: 12, pip: 10);
-    final ringExtended = isFingerExtended(features, tip: 16, pip: 14);
-    final pinkyExtended = isFingerExtended(features, tip: 20, pip: 18);
+    final indexLikelyExtended =
+        isFingerLikelyExtended(features, tip: 8, pip: 6);
+    final middleLikelyExtended =
+        isFingerLikelyExtended(features, tip: 12, pip: 10);
+    final ringLikelyExtended =
+        isFingerLikelyExtended(features, tip: 16, pip: 14);
+    final pinkyLikelyExtended =
+        isFingerLikelyExtended(features, tip: 20, pip: 18);
 
-    return indexExtended &&
-        !middleExtended &&
-        !ringExtended &&
-        !pinkyExtended;
+    final middleFolded = isFingerFolded(features, tip: 12, pip: 10, mcp: 9);
+    final ringFolded = isFingerFolded(features, tip: 16, pip: 14, mcp: 13);
+    final pinkyFolded = isFingerFolded(features, tip: 20, pip: 18, mcp: 17);
+
+    final middleClearlyDown =
+        landmarkY(features, 12) > landmarkY(features, 8) + 0.08;
+
+    return indexLikelyExtended &&
+        middleClearlyDown &&
+        middleFolded &&
+        ringFolded &&
+        pinkyFolded &&
+        !middleLikelyExtended &&
+        !ringLikelyExtended &&
+        !pinkyLikelyExtended;
   }
 
   Offset? buildCursorPosition(List<double> features) {
