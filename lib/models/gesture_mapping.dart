@@ -11,7 +11,7 @@ class GestureMapping {
 
   GestureMapping({
     this.oneFingerCommand = 'CURSOR_MOVE',
-    this.thumbCommand = 'CLICK',
+    this.thumbCommand = 'CLOSE_BROWSER',
     this.openPalmUpCommand = 'SCROLL_UP',
     this.openPalmDownCommand = 'SCROLL_DOWN',
     this.fistCommand = 'OPEN_THAIJO',
@@ -23,7 +23,7 @@ class GestureMapping {
   factory GestureMapping.defaults() {
     return GestureMapping(
       oneFingerCommand: 'CURSOR_MOVE',
-      thumbCommand: 'CLICK',
+      thumbCommand: 'CLOSE_BROWSER',
       fistCommand: 'OPEN_THAIJO',
       openPalmUpCommand: 'SCROLL_UP',
       openPalmDownCommand: 'SCROLL_DOWN',
