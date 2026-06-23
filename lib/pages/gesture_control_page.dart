@@ -41,6 +41,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
   DateTime? cursorFrozenUntil;
   String lastSentGesture = 'UNKNOWN';
 
+  bool isCloseBrowserDialogShowing = false;
+
   double? smoothedCursorX;
   double? smoothedCursorY;
   bool cursorWasActive = false;
@@ -856,6 +858,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
     lastCommandSentAt = now;
     lastSentGesture = gesture;
 
+    if (command == 'CLOSE_BROWSER') {
+      unawaited(confirmCloseBrowser(gesture));
+      return;
+    }
+
     webSocketService.sendCommand(
       command: command,
       gesture: gesture,
@@ -968,6 +975,50 @@ class _GestureControlPageState extends State<GestureControlPage> {
     webSocketService.statusText.value = 'Training samples cleared';
   }
 
+  Future<void> confirmCloseBrowser(String gesture) async {
+    if (isCloseBrowserDialogShowing || !mounted) {
+      return;
+    }
+
+    isCloseBrowserDialogShowing = true;
+
+    final shouldClose = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('ยืนยันการปิด Browser'),
+          content: const Text('ต้องการปิด Browser ใช่ไหม?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('ยกเลิก'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: const Text('ปิด Browser'),
+            ),
+          ],
+        );
+      },
+    );
+
+    isCloseBrowserDialogShowing = false;
+
+    if (!mounted || shouldClose != true) {
+      return;
+    }
+
+    webSocketService.sendCommand(
+      command: 'CLOSE_BROWSER',
+      gesture: gesture,
+    );
+  }
+
   void sendMappedGestureCommand({
     required String command,
     required String gesture,
@@ -985,6 +1036,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
     if (lastSentAt != null && now - lastSentAt < debounceMs) {
       webSocketService.statusText.value =
           'Ignored $gesture: debounce active (${debounceMs}ms)';
+      return;
+    }
+
+    if (command == 'CLOSE_BROWSER') {
+      unawaited(confirmCloseBrowser(gesture));
       return;
     }
 
