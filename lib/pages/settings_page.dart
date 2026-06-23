@@ -15,7 +15,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController portController;
 
   String oneFingerCommand = 'CURSOR_MOVE';
-  String thumbCommand = 'CLICK';
+  String thumbCommand = 'CLOSE_BROWSER';
   String openPalmUpCommand = 'SCROLL_UP';
   String openPalmDownCommand = 'SCROLL_DOWN';
   String fistCommand = 'OPEN_THAIJO';
@@ -361,7 +361,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   gestureMappingRow(
                     icon: '👌',
-                    gestureName: 'Thumb  / OK Sign',
+                    gestureName: 'Thumb',
                     value: thumbCommand,
                     onChanged: (value) {
                       if (value == null) return;
