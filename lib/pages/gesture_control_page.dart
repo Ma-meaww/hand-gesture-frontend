@@ -38,14 +38,20 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   DateTime? lastCommandSentAt;
   DateTime? lastCursorMoveSentAt;
+  DateTime? cursorFrozenUntil;
   String lastSentGesture = 'UNKNOWN';
 
   double? smoothedCursorX;
   double? smoothedCursorY;
   bool cursorWasActive = false;
 
+  Offset? dwellCursorStartPosition;
+  DateTime? dwellStartedAt;
+  DateTime? lastDwellClickAt;
+
   int cursorLostFrameCount = 0;
-  static const int cursorMaxLostFrames = 4;
+  static const int cursorMaxLostFrames = 1;
+  static const int cursorClickTransitionFreezeMs = 250;
 
   int oneFingerCandidateFrameCount = 0;
   static const int oneFingerRequiredFrames = 2;
@@ -59,6 +65,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   static const double cursorSmoothingFactor = 0.35;
   static const double cursorEdgeMargin = 0.12;
+  static const int dwellClickHoldMs = 1000;
+  static const int dwellClickCooldownMs = 1200;
+  static const double dwellClickMoveThreshold = 0.018;
+  static const int maxRealtimeLandmarkSmoothingWindow = 2;
+  static const int maxRealtimeGestureSmoothingWindow = 2;
 
   // Training Mode
   bool isTrainingMode = false;
@@ -238,7 +249,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
         .smoothingWindow
         .round();
 
-    final windowSize = configuredWindow < 1 ? 1 : configuredWindow;
+    final windowSize = configuredWindow < 1
+      ? 1
+      : configuredWindow > maxRealtimeLandmarkSmoothingWindow
+          ? maxRealtimeLandmarkSmoothingWindow
+          : configuredWindow;
 
     landmarkFeatureHistory.add(List<double>.from(features));
 
@@ -316,7 +331,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
         latestGesture = stableGesture;
       });
 
-      handleGestureCommand(stableGesture, processedFeatures);
+      handleGestureCommand(
+        stableGesture,
+        processedFeatures,
+        rawGesture: detectedGesture,
+      );
     } catch (e) {
       debugPrint('Hand detection error: $e');
     } finally {
@@ -395,6 +414,17 @@ class _GestureControlPageState extends State<GestureControlPage> {
     final thumbIpToWrist = distance2D(features, 3, 0);
 
     return thumbTipToWrist > thumbIpToWrist * 1.15;
+  }
+
+  bool isThumbClearlyExtended(List<double> features) {
+    if (features.length != 63) {
+      return false;
+    }
+
+    final thumbTipToWrist = distance2D(features, 4, 0);
+    final thumbIpToWrist = distance2D(features, 3, 0);
+
+    return thumbTipToWrist > thumbIpToWrist * 1.8;
   }
 
   bool isFingerFolded(
@@ -508,7 +538,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
     final configuredWindow =
         gestureSettingsService.mapping.value.smoothingWindow.round();
 
-    final maxWindow = configuredWindow < 1 ? 1 : configuredWindow;
+    final maxWindow = configuredWindow < 1
+      ? 1
+      : configuredWindow > maxRealtimeGestureSmoothingWindow
+          ? maxRealtimeGestureSmoothingWindow
+          : configuredWindow;
 
     if (gestureHistory.length > maxWindow) {
       gestureHistory.removeAt(0);
@@ -622,11 +656,54 @@ class _GestureControlPageState extends State<GestureControlPage> {
     );
   }
 
+  void resetDwellClickState() {
+    dwellCursorStartPosition = null;
+    dwellStartedAt = null;
+  }
+
+  void updateDwellClick(Offset cursorPosition, DateTime now) {
+    if (lastDwellClickAt != null &&
+        now.difference(lastDwellClickAt!).inMilliseconds <
+            dwellClickCooldownMs) {
+      return;
+    }
+
+    if (dwellCursorStartPosition == null || dwellStartedAt == null) {
+      dwellCursorStartPosition = cursorPosition;
+      dwellStartedAt = now;
+      return;
+    }
+
+    final dx = cursorPosition.dx - dwellCursorStartPosition!.dx;
+    final dy = cursorPosition.dy - dwellCursorStartPosition!.dy;
+    final distance = math.sqrt(dx * dx + dy * dy);
+
+    if (distance > dwellClickMoveThreshold) {
+      dwellCursorStartPosition = cursorPosition;
+      dwellStartedAt = now;
+      return;
+    }
+
+    final holdMs = now.difference(dwellStartedAt!).inMilliseconds;
+
+    if (holdMs >= dwellClickHoldMs) {
+      webSocketService.sendCommand(
+        command: 'CLICK',
+        gesture: 'DWELL_CLICK',
+      );
+
+      lastDwellClickAt = now;
+      resetDwellClickState();
+      webSocketService.statusText.value = 'Dwell click sent';
+    }
+  }
+
   void resetCursorControl() {
     smoothedCursorX = null;
     smoothedCursorY = null;
     lastCursorMoveSentAt = null;
     cursorLostFrameCount = 0;
+    resetDwellClickState();
 
     if (cursorWasActive && webSocketService.isConnected.value) {
       webSocketService.sendCommand(
@@ -638,7 +715,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
     cursorWasActive = false;
   }
 
-  void handleGestureCommand(String gesture, List<double> features) {
+  void handleGestureCommand(String gesture, List<double> features, {String? rawGesture,}) {
     if (isTrainingMode || isRecording) {
       resetCursorControl();
       return;
@@ -647,11 +724,48 @@ class _GestureControlPageState extends State<GestureControlPage> {
     final mapping = gestureSettingsService.mapping.value;
     final now = DateTime.now();
 
-    // Cursor ต้องมาก่อนการเช็ก UNKNOWN / NONE
-    // เพราะตอนขยับมือ classifier อาจหลุดเป็น UNKNOWN/FIST ชั่วคราว
+    final currentCommand =
+        gesture == 'UNKNOWN' ? 'NONE' : mapping.commandForGesture(gesture);
+
+    final transitionGesture = rawGesture ?? gesture;
+    final transitionCommand = transitionGesture == 'UNKNOWN'
+        ? 'NONE'
+        : mapping.commandForGesture(transitionGesture);
+
+    if (cursorFrozenUntil != null &&
+        now.isBefore(cursorFrozenUntil!) &&
+        currentCommand != 'CLICK') {
+      return;
+    }
+
+    if (cursorWasActive &&
+        transitionCommand == 'CLICK' &&
+        currentCommand != 'CLICK') {
+      resetCursorControl();
+      return;
+    }
+
+    if (cursorWasActive && currentCommand == 'CLICK') {
+      resetCursorControl();
+    }
+
     final oneFingerCommand = mapping.commandForGesture('ONE_FINGER');
     final normalizedCursorFeatures = normalizeFeatures(features);
     final isCursorPose = isOneFingerCursorPose(normalizedCursorFeatures);
+
+    final isPreparingThumbClick =
+        cursorWasActive &&
+        currentCommand != 'CLICK' &&
+        isThumbClearlyExtended(normalizedCursorFeatures);
+
+    if (isPreparingThumbClick) {
+      cursorFrozenUntil = now.add(
+        const Duration(milliseconds: cursorClickTransitionFreezeMs),
+      );
+
+      resetCursorControl();
+      return;
+    }
 
     final canTrackCursor =
         oneFingerCommand == 'CURSOR_MOVE' && features.length == 63;
@@ -665,10 +779,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
         cursorLostFrameCount = 0;
       } else {
         cursorLostFrameCount++;
-      }
 
-      if (cursorLostFrameCount > cursorMaxLostFrames) {
-        resetCursorControl();
+        if (cursorLostFrameCount > cursorMaxLostFrames) {
+          resetCursorControl();
+        }
+
         return;
       }
 
@@ -683,6 +798,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
         return;
       }
+
+      updateDwellClick(cursorPosition, now);
 
       if (lastCursorMoveSentAt != null &&
           now.difference(lastCursorMoveSentAt!).inMilliseconds <
@@ -708,7 +825,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
       return;
     }
 
-    final command = mapping.commandForGesture(gesture);
+    final command = currentCommand;
 
     if (command == 'NONE') {
       webSocketService.statusText.value = 'No command mapped for $gesture';
