@@ -291,7 +291,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
       final processedFeatures = smoothLandmarkFeatures(features);
       final normalizedFeatures = normalizeFeatures(processedFeatures);
 
-      final predictedGesture = gestureClassifier.classify(normalizedFeatures);
+      final predictedGesture = gestureClassifier.classify(processedFeatures);
       final guardedGesture = applyGestureRuleGuard(
         predictedGesture,
         normalizedFeatures,
