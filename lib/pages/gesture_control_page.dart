@@ -42,6 +42,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
   String lastSentGesture = 'UNKNOWN';
 
   bool isCloseBrowserDialogShowing = false;
+  bool isThaiJoOpenFromApp = false;
 
   double? smoothedCursorX;
   double? smoothedCursorY;
@@ -863,6 +864,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
       return;
     }
 
+    if (command == 'OPEN_THAIJO') {
+      isThaiJoOpenFromApp = true;
+    }
+
     webSocketService.sendCommand(
       command: command,
       gesture: gesture,
@@ -976,6 +981,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
   }
 
   Future<void> confirmCloseBrowser(String gesture) async {
+    if (!isThaiJoOpenFromApp) {
+      webSocketService.statusText.value =
+          'ยังไม่ได้เปิด ThaiJO จึงไม่ต้องปิด Browser';
+      return;
+    }
     if (isCloseBrowserDialogShowing || !mounted) {
       return;
     }
@@ -1017,6 +1027,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
       command: 'CLOSE_BROWSER',
       gesture: gesture,
     );
+    
+    isThaiJoOpenFromApp = false;
   }
 
   void sendMappedGestureCommand({
@@ -1044,12 +1056,17 @@ class _GestureControlPageState extends State<GestureControlPage> {
       return;
     }
 
+    if (command == 'OPEN_THAIJO') {
+      isThaiJoOpenFromApp = true;
+    }
+
     lastGestureCommandSentAt[gesture] = now;
 
     webSocketService.sendCommand(command: command, gesture: gesture);
   }
 
   void sendMacro() {
+    isThaiJoOpenFromApp = true;
     webSocketService.sendCommand(command: 'OPEN_THAIJO', gesture: 'MACRO');
   }
 
