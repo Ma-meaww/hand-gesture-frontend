@@ -253,10 +253,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
         .round();
 
     final windowSize = configuredWindow < 1
-      ? 1
-      : configuredWindow > maxRealtimeLandmarkSmoothingWindow
-          ? maxRealtimeLandmarkSmoothingWindow
-          : configuredWindow;
+        ? 1
+        : configuredWindow > maxRealtimeLandmarkSmoothingWindow
+        ? maxRealtimeLandmarkSmoothingWindow
+        : configuredWindow;
 
     landmarkFeatureHistory.add(List<double>.from(features));
 
@@ -292,7 +292,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
       final hands = handLandmarkerPlugin!.detect(
         image,
         cameraController!.description.sensorOrientation,
-      );      
+      );
 
       final features = <double>[];
 
@@ -444,7 +444,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
   }
 
   String applyGestureRuleGuard(String predictedGesture, List<double> features) {
-
     if (features.length != 63) {
       return 'UNKNOWN';
     }
@@ -538,14 +537,17 @@ class _GestureControlPageState extends State<GestureControlPage> {
   String smoothGesture(String gesture) {
     gestureHistory.add(gesture);
 
-    final configuredWindow =
-        gestureSettingsService.mapping.value.smoothingWindow.round();
+    final configuredWindow = gestureSettingsService
+        .mapping
+        .value
+        .smoothingWindow
+        .round();
 
     final maxWindow = configuredWindow < 1
-      ? 1
-      : configuredWindow > maxRealtimeGestureSmoothingWindow
-          ? maxRealtimeGestureSmoothingWindow
-          : configuredWindow;
+        ? 1
+        : configuredWindow > maxRealtimeGestureSmoothingWindow
+        ? maxRealtimeGestureSmoothingWindow
+        : configuredWindow;
 
     if (gestureHistory.length > maxWindow) {
       gestureHistory.removeAt(0);
@@ -592,14 +594,26 @@ class _GestureControlPageState extends State<GestureControlPage> {
       return false;
     }
 
-    final indexLikelyExtended =
-        isFingerLikelyExtended(features, tip: 8, pip: 6);
-    final middleLikelyExtended =
-        isFingerLikelyExtended(features, tip: 12, pip: 10);
-    final ringLikelyExtended =
-        isFingerLikelyExtended(features, tip: 16, pip: 14);
-    final pinkyLikelyExtended =
-        isFingerLikelyExtended(features, tip: 20, pip: 18);
+    final indexLikelyExtended = isFingerLikelyExtended(
+      features,
+      tip: 8,
+      pip: 6,
+    );
+    final middleLikelyExtended = isFingerLikelyExtended(
+      features,
+      tip: 12,
+      pip: 10,
+    );
+    final ringLikelyExtended = isFingerLikelyExtended(
+      features,
+      tip: 16,
+      pip: 14,
+    );
+    final pinkyLikelyExtended = isFingerLikelyExtended(
+      features,
+      tip: 20,
+      pip: 18,
+    );
 
     final middleFolded = isFingerFolded(features, tip: 12, pip: 10, mcp: 9);
     final ringFolded = isFingerFolded(features, tip: 16, pip: 14, mcp: 13);
@@ -653,10 +667,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
           smoothedCursorY! + (y - smoothedCursorY!) * cursorSmoothingFactor;
     }
 
-    return Offset(
-      clamp01(smoothedCursorX!),
-      clamp01(smoothedCursorY!),
-    );
+    return Offset(clamp01(smoothedCursorX!), clamp01(smoothedCursorY!));
   }
 
   void resetDwellClickState() {
@@ -690,10 +701,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
     final holdMs = now.difference(dwellStartedAt!).inMilliseconds;
 
     if (holdMs >= dwellClickHoldMs) {
-      webSocketService.sendCommand(
-        command: 'CLICK',
-        gesture: 'DWELL_CLICK',
-      );
+      webSocketService.sendCommand(command: 'CLICK', gesture: 'DWELL_CLICK');
 
       lastDwellClickAt = now;
       resetDwellClickState();
@@ -718,7 +726,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
     cursorWasActive = false;
   }
 
-  void handleGestureCommand(String gesture, List<double> features, {String? rawGesture,}) {
+  void handleGestureCommand(
+    String gesture,
+    List<double> features, {
+    String? rawGesture,
+  }) {
     if (isTrainingMode || isRecording) {
       resetCursorControl();
       return;
@@ -727,8 +739,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
     final mapping = gestureSettingsService.mapping.value;
     final now = DateTime.now();
 
-    final currentCommand =
-        gesture == 'UNKNOWN' ? 'NONE' : mapping.commandForGesture(gesture);
+    final currentCommand = gesture == 'UNKNOWN'
+        ? 'NONE'
+        : mapping.commandForGesture(gesture);
 
     final transitionGesture = rawGesture ?? gesture;
     final transitionCommand = transitionGesture == 'UNKNOWN'
@@ -868,10 +881,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
       isThaiJoOpenFromApp = true;
     }
 
-    webSocketService.sendCommand(
-      command: command,
-      gesture: gesture,
-    );
+    webSocketService.sendCommand(command: command, gesture: gesture);
   }
 
   int get totalSampleCount => trainingService.totalSampleCount;
@@ -1023,11 +1033,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
       return;
     }
 
-    webSocketService.sendCommand(
-      command: 'CLOSE_BROWSER',
-      gesture: gesture,
-    );
-    
+    webSocketService.sendCommand(command: 'CLOSE_BROWSER', gesture: gesture);
+
     isThaiJoOpenFromApp = false;
   }
 
@@ -1317,207 +1324,487 @@ class _GestureControlPageState extends State<GestureControlPage> {
   }
 
   @override
+  static const Color reginaBeige = Color(0xFFFFF5D7);
+  static const Color coralPink = Color.fromARGB(255, 222, 142, 186);
+  static const Color sleutheYellow = Color(0xFFFEB300);
+  static const Color pinkLeaf = Color(0xFFFFAAAB);
+  static const Color warmBrown = Color(0xFF6B4E3D);
+  static const Color softBrown = Color(0xFF9A7B5F);
+  Widget _softCard({
+    required Widget child,
+    EdgeInsets padding = const EdgeInsets.all(14),
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.76),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: pinkLeaf.withOpacity(0.45)),
+        boxShadow: [
+          BoxShadow(
+            color: warmBrown.withOpacity(0.10),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _statusCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Expanded(
+      child: _softCard(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        child: Column(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.14),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF5D5A53)),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _controlButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    bool filled = false,
+    Color color = const Color(0xFF1E73E8),
+  }) {
+    return Expanded(
+      child: SizedBox(
+        height: 72,
+        child: filled
+            ? ElevatedButton(
+                onPressed: onPressed,
+                style: ElevatedButton.styleFrom(
+                  elevation: 4,
+                  backgroundColor: color,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 26),
+                    const SizedBox(height: 6),
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              )
+            : OutlinedButton(
+                onPressed: onPressed,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: color,
+                  side: BorderSide(color: color, width: 1.4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 26),
+                    const SizedBox(height: 6),
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text(
           'Gesture Control',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 24,
+            color: warmBrown,
+          ),
         ),
         centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            ValueListenableBuilder<bool>(
-              valueListenable: webSocketService.isConnected,
-              builder: (context, connected, child) {
-                return Container(
-                  height: 40,
-                  width: double.infinity,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: const Color.fromARGB(96, 249, 136, 71),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('สถานะ : ', style: TextStyle(fontSize: 14)),
-                      ValueListenableBuilder<String>(
-                        valueListenable: webSocketService.statusText,
-                        builder: (context, status, child) {
-                          return Flexible(
-                            child: Text(
-                              status,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 14),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [reginaBeige, Color(0xFFFFE4B8), Color(0xFFFFD1D2)],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: webSocketService.isConnected,
+                  builder: (context, connected, child) {
+                    return _softCard(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: connected
+                                  ? Colors.green.withOpacity(0.12)
+                                  : Colors.red.withOpacity(0.12),
+                              shape: BoxShape.circle,
                             ),
-                          );
-                        },
+                            child: Icon(
+                              Icons.wifi,
+                              color: connected ? Colors.green : Colors.red,
+                              size: 28,
+                            ),
+                          ),
+
+                          const SizedBox(width: 14),
+
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  connected ? 'Connected' : 'Disconnected',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                    color: connected
+                                        ? Colors.green
+                                        : Colors.red,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  webSocketService.lastIp.isEmpty
+                                      ? 'No IP Address'
+                                      : webSocketService.lastIp,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: connected
+                                  ? Colors.green.withOpacity(0.12)
+                                  : Colors.red.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: connected
+                                        ? Colors.green
+                                        : Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  connected ? 'LIVE' : 'OFF',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: connected
+                                        ? Colors.green
+                                        : Colors.red,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      wifiIcon(connected),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 14),
+
+                Container(
+                  height: 300,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE9D8A6)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      ),
                     ],
                   ),
-                );
-              },
-            ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        cameraPreviewBox(),
 
-            const SizedBox(height: 20),
-
-            Container(
-              height: 420,
-              width: 280,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.black12,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: cameraPreviewBox(),
-            ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              isDetecting
-                  ? 'Detected Hands: $detectedHandCount | Features: ${latestLandmarkFeatures.length} | Gesture: $latestGesture'
-                  : 'Detection is stopped',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 24),
-
-            const Text(
-              'หน้าตรวจจับท่าทางมือ',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isDetecting
-                          ? Colors.grey
-                          : const Color.fromARGB(237, 243, 114, 88),
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: toggleDetection,
-                    child: Text(
-                      isDetecting ? 'Stop Detection' : 'Start Detection',
+                        Positioned(
+                          left: 12,
+                          top: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.82),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.green,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'LIVE',
+                                  style: TextStyle(
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
 
-                const SizedBox(width: 10),
+                const SizedBox(height: 14),
 
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(237, 243, 114, 88),
-                      foregroundColor: Colors.white,
+                Row(
+                  children: [
+                    _statusCard(
+                      icon: Icons.back_hand_outlined,
+                      title: 'Detected Hands',
+                      value: '$detectedHandCount',
+                      color: coralPink,
                     ),
-                    onPressed: sendMacro,
-                    child: const Text("Macro"),
+                    const SizedBox(width: 12),
+                    _statusCard(
+                      icon: Icons.pan_tool_alt_outlined,
+                      title: 'Detected Gesture',
+                      value: latestGesture == 'UNKNOWN'
+                          ? 'Unknown'
+                          : latestGesture,
+                      color: sleutheYellow,
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 18),
+
+                const Text(
+                  'Controls',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: warmBrown,
                   ),
+                ),
+
+                const SizedBox(height: 10),
+
+                Row(
+                  children: [
+                    _controlButton(
+                      icon: isDetecting ? Icons.stop : Icons.play_arrow,
+                      label: isDetecting ? 'Stop Detection' : 'Start Detection',
+                      onPressed: toggleDetection,
+                      filled: true,
+                      color: isDetecting ? Colors.grey : coralPink,
+                    ),
+                    const SizedBox(width: 10),
+                    _controlButton(
+                      icon: Icons.grid_view_rounded,
+                      label: 'Macro',
+                      onPressed: sendMacro,
+                      color: sleutheYellow,
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+
+                Text(
+                  isDetecting
+                      ? 'Auto gesture control is active.'
+                      : 'Press Start Detection to enable auto gesture control.',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                /*  SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: toggleTrainingMode,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF1E73E8),
+                      side: const BorderSide(color: Color(0xFF1E73E8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    icon: const Icon(Icons.model_training),
+                    label: Text(
+                      isTrainingMode
+                          ? 'Hide Training Mode'
+                          : 'Show Training Mode',
+                    ),
+                  ),
+                ),
+
+                if (isTrainingMode) ...[
+                  const SizedBox(height: 16),
+                  trainingModeSection(),
+                ],
+
+                const SizedBox(height: 20),
+
+                const Text(
+                  'Manual Test Commands',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 12),
+
+                ValueListenableBuilder(
+                  valueListenable: gestureSettingsService.mapping,
+                  builder: (context, mapping, child) {
+                    return Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        commandButton(
+                          label: 'Open Palm Up',
+                          command: mapping.openPalmUpCommand,
+                          gesture: 'OPEN_PALM_UP',
+                        ),
+                        commandButton(
+                          label: 'Open Palm Down',
+                          command: mapping.openPalmDownCommand,
+                          gesture: 'OPEN_PALM_DOWN',
+                        ),
+                        commandButton(
+                          label: 'Two Finger',
+                          command: mapping.twoFingerCommand,
+                          gesture: 'TWO_FINGER',
+                        ),
+                        commandButton(
+                          label: 'Fist',
+                          command: mapping.fistCommand,
+                          gesture: 'FIST',
+                        ),
+                        commandButton(
+                          label: 'Thumb',
+                          command: mapping.thumbCommand,
+                          gesture: 'THUMB',
+                        ),
+                        commandButton(
+                          label: 'Close Browser',
+                          command: 'CLOSE_BROWSER',
+                          gesture: 'CLOSE_BROWSER',
+                        ),
+                      ],
+                    );
+                  },
+                ),*/
+                const SizedBox(height: 16),
+
+                ValueListenableBuilder<String>(
+                  valueListenable: webSocketService.lastAck,
+                  builder: (context, ack, child) {
+                    return Center(
+                      child: Text(
+                        'Last ACK: $ack',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Color(0xFF6B7280)),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              isDetecting
-                  ? 'Auto gesture control is active. Hand gestures can send commands automatically.'
-                  : 'Press Start Detection to enable auto gesture control.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
-            ),
-
-            const SizedBox(height: 12),
-
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: toggleTrainingMode,
-                icon: const Icon(Icons.model_training),
-                label: Text(
-                  isTrainingMode ? 'Hide Training Mode' : 'Show Training Mode',
-                ),
-              ),
-            ),
-
-            if (isTrainingMode) ...[
-              const SizedBox(height: 16),
-              trainingModeSection(),
-            ],
-
-            const SizedBox(height: 20),
-
-            const Text(
-              'Manual Test Commands',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 12),
-
-            ValueListenableBuilder(
-              valueListenable: gestureSettingsService.mapping,
-              builder: (context, mapping, child) {
-                return Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    commandButton(
-                      label: 'Open Palm Up',
-                      command: mapping.openPalmUpCommand,
-                      gesture: 'OPEN_PALM_UP',
-                    ),
-                    commandButton(
-                      label: 'Open Palm Down',
-                      command: mapping.openPalmDownCommand,
-                      gesture: 'OPEN_PALM_DOWN',
-                    ),
-                    commandButton(
-                      label: 'Two Finger',
-                      command: mapping.twoFingerCommand,
-                      gesture: 'TWO_FINGER',
-                    ),
-                    commandButton(
-                      label: 'Fist',
-                      command: mapping.fistCommand,
-                      gesture: 'FIST',
-                    ),
-                    commandButton(
-                      label: 'Thumb',
-                      command: mapping.thumbCommand,
-                      gesture: 'THUMB',
-                    ),
-                    commandButton(
-                      label: 'Close Browser',
-                      command: 'CLOSE_BROWSER',
-                      gesture: 'CLOSE_BROWSER',
-                    ),
-                  ],
-                );
-              },
-            ),
-
-            const SizedBox(height: 16),
-
-            ValueListenableBuilder<String>(
-              valueListenable: webSocketService.lastAck,
-              builder: (context, ack, child) {
-                return Text('Last ACK: $ack', textAlign: TextAlign.center);
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1538,12 +1825,12 @@ class HandLandmarkPainter extends CustomPainter {
   });
 
   static const List<List<int>> fingerConnections = [
-    [0, 1, 2, 3, 4],      // Thumb
-    [0, 5, 6, 7, 8],      // Index
-    [0, 9, 10, 11, 12],   // Middle
-    [0, 13, 14, 15, 16],  // Ring
-    [0, 17, 18, 19, 20],  // Pinky
-    [5, 9, 13, 17, 5],    // Palm
+    [0, 1, 2, 3, 4], // Thumb
+    [0, 5, 6, 7, 8], // Index
+    [0, 9, 10, 11, 12], // Middle
+    [0, 13, 14, 15, 16], // Ring
+    [0, 17, 18, 19, 20], // Pinky
+    [5, 9, 13, 17, 5], // Palm
   ];
 
   static const Map<int, String> fingertipLabels = {
@@ -1591,10 +1878,7 @@ class HandLandmarkPainter extends CustomPainter {
         y = 1 - y;
       }
 
-      return Offset(
-        x * size.width,
-        y * size.height,
-      );
+      return Offset(x * size.width, y * size.height);
     }
 
     // วาดเส้นเชื่อมข้อนิ้ว
@@ -1639,10 +1923,7 @@ class HandLandmarkPainter extends CustomPainter {
 
       textPainter.layout();
 
-      final labelOffset = Offset(
-        point.dx + 8,
-        point.dy - 18,
-      );
+      final labelOffset = Offset(point.dx + 8, point.dy - 18);
 
       textPainter.paint(canvas, labelOffset);
     });
@@ -1651,8 +1932,8 @@ class HandLandmarkPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant HandLandmarkPainter oldDelegate) {
     return oldDelegate.landmarks != landmarks ||
-      oldDelegate.mirrorX != mirrorX ||
-      oldDelegate.mirrorY != mirrorY ||
-      oldDelegate.swapXY != swapXY;
+        oldDelegate.mirrorX != mirrorX ||
+        oldDelegate.mirrorY != mirrorY ||
+        oldDelegate.swapXY != swapXY;
   }
 }
