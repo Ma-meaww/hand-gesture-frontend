@@ -1325,7 +1325,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   @override
   static const Color reginaBeige = Color(0xFFFFF5D7);
-  static const Color coralPink = Color.fromARGB(255, 222, 142, 186);
+  static const Color coralPink = Color.fromARGB(255, 246, 151, 203);
   static const Color sleutheYellow = Color(0xFFFEB300);
   static const Color pinkLeaf = Color(0xFFFFAAAB);
   static const Color warmBrown = Color(0xFF6B4E3D);
