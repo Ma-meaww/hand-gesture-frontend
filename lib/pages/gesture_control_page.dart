@@ -9,7 +9,6 @@ import 'package:hand_landmarker/hand_landmarker.dart';
 import '../app_settings.dart';
 import '../services/camera_service.dart';
 import '../services/websocket_service.dart';
-import '../services/training_sample_service.dart';
 import '../services/gesture_settings_service.dart';
 import '../services/gesture_classifier_service.dart';
 
@@ -26,6 +25,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   bool isDetecting = false;
   HandLandmarkerPlugin? handLandmarkerPlugin;
+
+  bool isCameraOn = false;
 
   bool isProcessingFrame = false;
   int detectedHandCount = 0;
@@ -74,26 +75,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
   static const int maxRealtimeLandmarkSmoothingWindow = 2;
   static const int maxRealtimeGestureSmoothingWindow = 2;
 
-  // Training Mode
-  bool isTrainingMode = false;
-  bool isRecording = false;
-  String selectedGestureLabel = 'ONE_FINGER';
-
-  Timer? recordingTimer;
-
-  final TrainingSampleService trainingService = TrainingSampleService();
   final Map<String, int> lastGestureCommandSentAt = {};
   final List<List<double>> landmarkFeatureHistory = [];
   final GestureClassifierService gestureClassifier = GestureClassifierService();
-
-  final List<String> gestureLabels = const [
-    'ONE_FINGER',
-    'THUMB',
-    'FIST',
-    'OPEN_PALM_UP',
-    'OPEN_PALM_DOWN',
-    'TWO_FINGER',
-  ];
 
   @override
   void initState() {
@@ -103,7 +87,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   Future<void> setupAll() async {
     await setupGestureClassifier();
-    await setupCamera();
   }
 
   Future<void> setupGestureClassifier() async {
@@ -154,7 +137,9 @@ class _GestureControlPageState extends State<GestureControlPage> {
       }
 
       if (mounted) {
-        setState(() {});
+        setState(() {
+          isCameraOn = true;
+        });
       }
     } catch (e) {
       webSocketService.statusText.value = 'Camera setup failed';
@@ -168,7 +153,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
   @override
   void dispose() {
-    recordingTimer?.cancel();
 
     try {
       final controller = cameraController;
@@ -195,6 +179,10 @@ class _GestureControlPageState extends State<GestureControlPage> {
     oneFingerMissFrameCount = 0;
     latestGesture = 'UNKNOWN';
     if (cameraController == null || !cameraController!.value.isInitialized) {
+      await setupCamera();
+    }
+
+    if (cameraController == null || !cameraController!.value.isInitialized) {
       webSocketService.statusText.value = 'Camera not ready';
       return;
     }
@@ -218,7 +206,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
   }
 
   Future<void> stopHandDetection() async {
-    recordingTimer?.cancel();
 
     if (cameraController != null && cameraController!.value.isStreamingImages) {
       await cameraController!.stopImageStream();
@@ -226,7 +213,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
     setState(() {
       isDetecting = false;
-      isRecording = false;
       detectedHandCount = 0;
       latestLandmarkFeatures = [];
       latestGesture = 'UNKNOWN';
@@ -731,10 +717,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
     List<double> features, {
     String? rawGesture,
   }) {
-    if (isTrainingMode || isRecording) {
-      resetCursorControl();
-      return;
-    }
 
     final mapping = gestureSettingsService.mapping.value;
     final now = DateTime.now();
@@ -884,12 +866,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
     webSocketService.sendCommand(command: command, gesture: gesture);
   }
 
-  int get totalSampleCount => trainingService.totalSampleCount;
-
-  int getSampleCountByLabel(String label) {
-    return trainingService.getSampleCountByLabel(label);
-  }
-
   void toggleDetection() {
     if (isDetecting) {
       stopHandDetection();
@@ -898,96 +874,45 @@ class _GestureControlPageState extends State<GestureControlPage> {
     }
   }
 
-  void toggleTrainingMode() {
-    setState(() {
-      isTrainingMode = !isTrainingMode;
-    });
+  Future<void> toggleCamera() async {
+    if (isCameraOn) {
+      await closeCameraOnly();
+    } else {
+      await setupCamera();
+    }
   }
 
-  Future<void> startRecording() async {
-    if (isRecording) return;
+  Future<void> closeCameraOnly() async {
 
-    if (!isDetecting) {
-      await startHandDetection();
+    try {
+      if (cameraController != null &&
+          cameraController!.value.isStreamingImages) {
+        await cameraController!.stopImageStream();
+      }
+
+      await cameraController?.dispose();
+    } catch (e) {
+      debugPrint('Close camera error: $e');
     }
 
-    if (handLandmarkerPlugin == null || !isDetecting) {
-      webSocketService.statusText.value =
-          'ยังเริ่มบันทึกไม่ได้ เพราะ Hand Landmarker ยังไม่พร้อม';
-      return;
-    }
-
-    setState(() {
-      isRecording = true;
-    });
-
-    webSocketService.statusText.value =
-        'Recording $selectedGestureLabel: กรุณาวางมือให้อยู่ในกล้อง';
-
-    recordingTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      addLandmarkSample();
-    });
-  }
-
-  void stopRecording() {
-    recordingTimer?.cancel();
-
-    setState(() {
-      isRecording = false;
-    });
-
-    webSocketService.statusText.value = 'Recording stopped';
-  }
-
-  void addLandmarkSample() {
-    if (latestLandmarkFeatures.length != 63) {
-      webSocketService.statusText.value =
-          'ไม่พบ landmark มือ กรุณาวางมือให้อยู่ในกล้อง';
-      return;
-    }
-
-    trainingService.addSample(
-      label: selectedGestureLabel,
-      features: latestLandmarkFeatures,
-    );
-
-    setState(() {});
-
-    webSocketService.statusText.value =
-        'Saved $selectedGestureLabel sample (${getSampleCountByLabel(selectedGestureLabel)})';
-  }
-
-  Future<void> exportCsvMock() async {
-    if (trainingService.totalSampleCount == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ยังไม่มี sample สำหรับ export')),
-      );
-      return;
-    }
-
-    final csvText = trainingService.buildCsvText();
-
-    await Clipboard.setData(ClipboardData(text: csvText));
+    cameraController = null;
+    initializeCameraFuture = null;
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Export CSV แล้ว ($totalSampleCount samples) คัดลอกไว้ใน clipboard',
-        ),
-      ),
-    );
-  }
-
-  void clearSamples() {
-    stopRecording();
-
     setState(() {
-      trainingService.clear();
+      isCameraOn = false;
+      isDetecting = false;
+      detectedHandCount = 0;
+      latestLandmarkFeatures = [];
+      latestGesture = 'UNKNOWN';
     });
 
-    webSocketService.statusText.value = 'Training samples cleared';
+    landmarkFeatureHistory.clear();
+    gestureHistory.clear();
+    resetCursorControl();
+
+    webSocketService.statusText.value = 'Camera closed';
   }
 
   Future<void> confirmCloseBrowser(String gesture) async {
@@ -1085,7 +1010,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        const Icon(Icons.wifi, color: Colors.red, size: 22),
+        const Icon(Icons.wifi_off_rounded, color: Colors.red, size: 22),
         Positioned(
           right: -4,
           bottom: -4,
@@ -1156,174 +1081,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
           );
         }
 
-        if (snapshot.hasError) {
-          return Text(
-            'เปิดกล้องไม่สำเร็จ\n${snapshot.error}',
-            textAlign: TextAlign.center,
-          );
-        }
-
         return const Center(child: CircularProgressIndicator());
       },
     );
   }
 
-  Widget labelCountChip(String label) {
-    final count = getSampleCountByLabel(label);
-
-    return Chip(
-      label: Text('$label: $count'),
-      backgroundColor: label == selectedGestureLabel
-          ? const Color.fromARGB(90, 243, 114, 88)
-          : Colors.white.withOpacity(0.6),
-    );
-  }
-
-  Widget trainingModeSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.45),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color.fromARGB(120, 243, 114, 88)),
-      ),
-      child: Column(
-        children: [
-          const Text(
-            'Training Mode',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-
-          const SizedBox(height: 12),
-
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              'Current Label: $selectedGestureLabel',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          DropdownButtonFormField<String>(
-            initialValue: selectedGestureLabel,
-            decoration: const InputDecoration(
-              labelText: 'Gesture Label',
-              border: OutlineInputBorder(),
-            ),
-            items: gestureLabels.map((label) {
-              return DropdownMenuItem(value: label, child: Text(label));
-            }).toList(),
-            onChanged: isRecording
-                ? null
-                : (value) {
-                    if (value == null) return;
-
-                    setState(() {
-                      selectedGestureLabel = value;
-                    });
-                  },
-          ),
-
-          const SizedBox(height: 16),
-
-          Text(
-            'Total Sample Count: $totalSampleCount',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-
-          const SizedBox(height: 12),
-
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: gestureLabels.map(labelCountChip).toList(),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isRecording
-                        ? Colors.grey
-                        : const Color.fromARGB(237, 243, 114, 88),
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: isRecording
-                      ? null
-                      : () {
-                          startRecording();
-                        },
-                  child: const Text('Start Recording'),
-                ),
-              ),
-
-              const SizedBox(width: 10),
-
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey,
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: isRecording ? stopRecording : null,
-                  child: const Text('Stop'),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: exportCsvMock,
-                  icon: const Icon(Icons.file_download),
-                  label: const Text('Export CSV'),
-                ),
-              ),
-
-              const SizedBox(width: 10),
-
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: clearSamples,
-                  icon: const Icon(Icons.delete),
-                  label: const Text('Clear'),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          const Text(
-            'ระบบจะบันทึก landmark 21 จุดจาก MediaPipe เมื่อพบมือในกล้อง',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
   static const Color reginaBeige = Color(0xFFFFF5D7);
   static const Color coralPink = Color.fromARGB(255, 246, 151, 203);
   static const Color sleutheYellow = Color(0xFFFEB300);
@@ -1383,11 +1145,14 @@ class _GestureControlPageState extends State<GestureControlPage> {
             Text(
               value,
               textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+              softWrap: true,
+              overflow: TextOverflow.visible,
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
+                fontSize: value.length > 10 ? 14 : 16,
+                fontWeight: FontWeight.w900,
                 color: color,
+                height: 1.1,
               ),
             ),
           ],
@@ -1420,13 +1185,21 @@ class _GestureControlPageState extends State<GestureControlPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, size: 26),
-                    const SizedBox(height: 6),
-                    Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
+                    Icon(icon, size: label.isEmpty ? 30 : 25),
+                    if (label.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.visible,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          height: 1.05,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               )
@@ -1452,6 +1225,48 @@ class _GestureControlPageState extends State<GestureControlPage> {
                   ],
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _circleCameraButton() {
+    final Color cameraColor = isCameraOn ? coralPink : warmBrown;
+
+    return Expanded(
+      child: SizedBox(
+        height: 72,
+        child: Center(
+          child: InkWell(
+            onTap: toggleCamera,
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: cameraColor.withOpacity(0.16),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: cameraColor.withOpacity(0.55),
+                  width: 1.6,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: cameraColor.withOpacity(0.12),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Icon(
+                isCameraOn
+                    ? Icons.videocam_rounded
+                    : Icons.videocam_off_rounded,
+                color: cameraColor,
+                size: 34,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1491,11 +1306,15 @@ class _GestureControlPageState extends State<GestureControlPage> {
                   valueListenable: webSocketService.isConnected,
                   builder: (context, connected, child) {
                     return _softCard(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       child: Row(
                         children: [
                           Container(
-                            width: 52,
-                            height: 52,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               color: connected
                                   ? Colors.green.withOpacity(0.12)
@@ -1505,11 +1324,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
                             child: Icon(
                               Icons.wifi,
                               color: connected ? Colors.green : Colors.red,
-                              size: 28,
+                              size: 22,
                             ),
                           ),
 
-                          const SizedBox(width: 14),
+                          const SizedBox(width: 10),
 
                           Expanded(
                             child: Column(
@@ -1518,20 +1337,20 @@ class _GestureControlPageState extends State<GestureControlPage> {
                                 Text(
                                   connected ? 'Connected' : 'Disconnected',
                                   style: TextStyle(
-                                    fontSize: 20,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.w800,
                                     color: connected
                                         ? Colors.green
                                         : Colors.red,
                                   ),
                                 ),
-                                const SizedBox(height: 2),
+                                const SizedBox(height: 1),
                                 Text(
                                   webSocketService.lastIp.isEmpty
                                       ? 'No IP Address'
                                       : webSocketService.lastIp,
                                   style: const TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 12,
                                     color: Color(0xFF6B7280),
                                   ),
                                 ),
@@ -1541,8 +1360,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
 
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 7,
+                              horizontal: 9,
+                              vertical: 5,
                             ),
                             decoration: BoxDecoration(
                               color: connected
@@ -1553,8 +1372,8 @@ class _GestureControlPageState extends State<GestureControlPage> {
                             child: Row(
                               children: [
                                 Container(
-                                  width: 8,
-                                  height: 8,
+                                  width: 6,
+                                  height: 6,
                                   decoration: BoxDecoration(
                                     color: connected
                                         ? Colors.green
@@ -1562,10 +1381,11 @@ class _GestureControlPageState extends State<GestureControlPage> {
                                     shape: BoxShape.circle,
                                   ),
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 5),
                                 Text(
                                   connected ? 'LIVE' : 'OFF',
                                   style: TextStyle(
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                     color: connected
                                         ? Colors.green
@@ -1580,8 +1400,6 @@ class _GestureControlPageState extends State<GestureControlPage> {
                     );
                   },
                 ),
-
-                const SizedBox(height: 14),
 
                 Container(
                   height: 300,
@@ -1603,47 +1421,36 @@ class _GestureControlPageState extends State<GestureControlPage> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        cameraPreviewBox(),
-
-                        Positioned(
-                          left: 12,
-                          top: 12,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.82),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.green,
-                                    shape: BoxShape.circle,
-                                  ),
+                        if (isCameraOn)
+                          cameraPreviewBox()
+                        else
+                          Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(
+                                  Icons.videocam_off_rounded,
+                                  size: 54,
+                                  color: Color(0xFF9B7358),
                                 ),
-                                const SizedBox(width: 6),
+                                SizedBox(height: 10),
                                 Text(
-                                  'LIVE',
+                                  'Camera is off',
                                   style: TextStyle(
-                                    color: Colors.green,
-                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF6B4A35),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ),
                 ),
 
+                const SizedBox(height: 14),
                 const SizedBox(height: 14),
 
                 Row(
@@ -1682,13 +1489,17 @@ class _GestureControlPageState extends State<GestureControlPage> {
                 Row(
                   children: [
                     _controlButton(
-                      icon: isDetecting ? Icons.stop : Icons.play_arrow,
-                      label: isDetecting ? 'Stop Detection' : 'Start Detection',
+                      icon: isDetecting
+                          ? Icons.stop_rounded
+                          : Icons.play_arrow_rounded,
+                      label: isDetecting ? 'Stop\nDetect' : 'Start\nDetect',
                       onPressed: toggleDetection,
                       filled: true,
                       color: isDetecting ? Colors.grey : coralPink,
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 6),
+                    _circleCameraButton(),
+                    const SizedBox(width: 8),
                     _controlButton(
                       icon: Icons.grid_view_rounded,
                       label: 'Macro',
@@ -1710,98 +1521,7 @@ class _GestureControlPageState extends State<GestureControlPage> {
                   ),
                 ),
 
-                const SizedBox(height: 12),
-
-                /*  SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: toggleTrainingMode,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF1E73E8),
-                      side: const BorderSide(color: Color(0xFF1E73E8)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    icon: const Icon(Icons.model_training),
-                    label: Text(
-                      isTrainingMode
-                          ? 'Hide Training Mode'
-                          : 'Show Training Mode',
-                    ),
-                  ),
-                ),
-
-                if (isTrainingMode) ...[
-                  const SizedBox(height: 16),
-                  trainingModeSection(),
-                ],
-
-                const SizedBox(height: 20),
-
-                const Text(
-                  'Manual Test Commands',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-
-                const SizedBox(height: 12),
-
-                ValueListenableBuilder(
-                  valueListenable: gestureSettingsService.mapping,
-                  builder: (context, mapping, child) {
-                    return Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        commandButton(
-                          label: 'Open Palm Up',
-                          command: mapping.openPalmUpCommand,
-                          gesture: 'OPEN_PALM_UP',
-                        ),
-                        commandButton(
-                          label: 'Open Palm Down',
-                          command: mapping.openPalmDownCommand,
-                          gesture: 'OPEN_PALM_DOWN',
-                        ),
-                        commandButton(
-                          label: 'Two Finger',
-                          command: mapping.twoFingerCommand,
-                          gesture: 'TWO_FINGER',
-                        ),
-                        commandButton(
-                          label: 'Fist',
-                          command: mapping.fistCommand,
-                          gesture: 'FIST',
-                        ),
-                        commandButton(
-                          label: 'Thumb',
-                          command: mapping.thumbCommand,
-                          gesture: 'THUMB',
-                        ),
-                        commandButton(
-                          label: 'Close Browser',
-                          command: 'CLOSE_BROWSER',
-                          gesture: 'CLOSE_BROWSER',
-                        ),
-                      ],
-                    );
-                  },
-                ),*/
-                const SizedBox(height: 16),
-
-                ValueListenableBuilder<String>(
-                  valueListenable: webSocketService.lastAck,
-                  builder: (context, ack, child) {
-                    return Center(
-                      child: Text(
-                        'Last ACK: $ack',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Color(0xFF6B7280)),
-                      ),
-                    );
-                  },
-                ),
+                const SizedBox(height: 8),
               ],
             ),
           ),

@@ -36,10 +36,7 @@ class _VoiceCommandPageState extends State<VoiceCommandPage> {
       return;
     }
 
-    webSocketService.sendCommand(
-      command: 'THAIJO_INPUT_SEARCH',
-      text: text,
-    );
+    webSocketService.sendCommand(command: 'THAIJO_INPUT_SEARCH', text: text);
   }
 
   void submitThaiJoSearch() {
@@ -120,9 +117,7 @@ class _VoiceCommandPageState extends State<VoiceCommandPage> {
           setState(() {
             textController.value = TextEditingValue(
               text: finalText,
-              selection: TextSelection.collapsed(
-                offset: finalText.length,
-              ),
+              selection: TextSelection.collapsed(offset: finalText.length),
             );
           });
         },
@@ -138,112 +133,242 @@ class _VoiceCommandPageState extends State<VoiceCommandPage> {
     }
   }
 
+  static const Color reginaBeige = Color(0xFFFFF5D7);
+  static const Color coralPink = Color.fromARGB(255, 246, 151, 203);
+  static const Color sleutheYellow = Color(0xFFFEB300);
+  static const Color pinkLeaf = Color(0xFFFFAAAB);
+  static const Color warmBrown = Color(0xFF6B4E3D);
+  static const Color softBrown = Color(0xFF9A7B5F);
+
+  Widget _softCard({
+    required Widget child,
+    EdgeInsets padding = const EdgeInsets.all(16),
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.76),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: pinkLeaf.withOpacity(0.45)),
+        boxShadow: [
+          BoxShadow(
+            color: warmBrown.withOpacity(0.10),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Voice Command'),
+        title: const Text(
+          'Voice Command',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 24,
+            color: warmBrown,
+          ),
+        ),
         centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            InkWell(
-              onTap: toggleListening,
-              borderRadius: BorderRadius.circular(60),
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: isListening
-                      ? Colors.red.withOpacity(0.15)
-                      : Colors.black.withOpacity(0.08),
-                  shape: BoxShape.circle,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [reginaBeige, Color(0xFFFFE4B8), Color(0xFFFFD1D2)],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
+            child: Column(
+              children: [
+                const SizedBox(height: 6),
+
+                InkWell(
+                  onTap: toggleListening,
+                  borderRadius: BorderRadius.circular(999),
+                  child: Container(
+                    width: 126,
+                    height: 126,
+                    decoration: BoxDecoration(
+                      color: isListening
+                          ? coralPink.withOpacity(0.20)
+                          : Colors.white.withOpacity(0.72),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isListening
+                            ? coralPink.withOpacity(0.65)
+                            : pinkLeaf.withOpacity(0.55),
+                        width: 2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: warmBrown.withOpacity(0.12),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      isListening ? Icons.mic_rounded : Icons.mic_off_rounded,
+                      size: 62,
+                      color: isListening ? coralPink : warmBrown,
+                    ),
+                  ),
                 ),
-                child: Icon(
-                  isListening ? Icons.mic_off : Icons.mic,
-                  size: 70,
-                  color: isListening ? Colors.red : Colors.black,
+
+                const SizedBox(height: 14),
+
+                Text(
+                  isListening ? 'Listening...' : 'Microphone is off',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: isListening ? coralPink : warmBrown,
+                  ),
                 ),
-              ),
-            ),
 
-            const SizedBox(height: 24),
+                const SizedBox(height: 8),
 
-            const Text(
-              'หน้าป้อนคำสั่งด้วยเสียง',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            const Text(
-              'กดปุ่มไมค์เพื่อพูดให้ข้อความขึ้นในช่อง หรือพิมพ์ข้อความเองก็ได้',
-              textAlign: TextAlign.center,
-            ),
-
-            const SizedBox(height: 24),
-
-            TextField(
-              controller: textController,
-              minLines: 3,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                labelText: 'ข้อความคำสั่ง',
-                hintText: 'เช่น machine learning',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.all(16),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color.fromARGB(237, 243, 114, 88),
-                foregroundColor: Colors.white,
-              ),
-              onPressed: sendVoiceText,
-              icon: const Icon(Icons.send),
-              label: const Text('Send Text'),
-            ),
-
-            const SizedBox(height: 12),
-
-            OutlinedButton.icon(
-              onPressed: submitThaiJoSearch,
-              icon: const Icon(Icons.search),
-              label: const Text('Submit ThaiJO Search'),
-            ),
-
-            const SizedBox(height: 20),
-
-            ValueListenableBuilder<String>(
-              valueListenable: webSocketService.statusText,
-              builder: (context, status, child) {
-                return Text(
-                  status,
+                const Text(
+                  'Tap the microphone to speak, or type your search text manually.',
                   textAlign: TextAlign.center,
-                );
-              },
-            ),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: softBrown,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
 
-            const SizedBox(height: 8),
+                const SizedBox(height: 18),
 
-            ValueListenableBuilder<String>(
-              valueListenable: webSocketService.lastAck,
-              builder: (context, ack, child) {
-                return Text(
-                  'Last ACK: $ack',
-                  textAlign: TextAlign.center,
-                );
-              },
+                _softCard(
+                  child: TextField(
+                    controller: textController,
+                    minLines: 3,
+                    maxLines: 5,
+                    style: const TextStyle(
+                      color: warmBrown,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Search Text',
+                      hintText: 'เช่น machine learning',
+                      labelStyle: const TextStyle(color: softBrown),
+                      hintStyle: TextStyle(color: softBrown.withOpacity(0.65)),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.64),
+                      contentPadding: const EdgeInsets.all(16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: pinkLeaf.withOpacity(0.45),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: pinkLeaf.withOpacity(0.45),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(
+                          color: coralPink,
+                          width: 1.6,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 56,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            elevation: 4,
+                            backgroundColor: coralPink,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                          ),
+                          onPressed: sendVoiceText,
+                          icon: const Icon(Icons.send_rounded),
+                          label: const Text(
+                            'Send Text',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      elevation: 3,
+                      backgroundColor: sleutheYellow,
+                      foregroundColor: warmBrown,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    onPressed: submitThaiJoSearch,
+                    icon: const Icon(Icons.search_rounded),
+                    label: const Text(
+                      'Submit ThaiJO Search',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                ValueListenableBuilder<String>(
+                  valueListenable: webSocketService.statusText,
+                  builder: (context, status, child) {
+                    return _softCard(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      child: Text(
+                        status,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: softBrown,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
